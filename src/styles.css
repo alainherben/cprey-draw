@@ -826,6 +826,133 @@ button.active {
   color: #1d4ed8;
 }
 
+.pdf-export-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.pdf-export-dialog {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  width: min(560px, 100%);
+  max-height: min(680px, calc(100vh - 36px));
+  border: 1px solid #b8c2cc;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2933;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.pdf-export-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #d8e0e8;
+  padding: 16px 18px;
+}
+
+.pdf-export-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.pdf-export-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.pdf-export-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 14px;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+
+.pdf-export-content fieldset {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #d8e0e8;
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.pdf-export-content legend {
+  padding: 0 5px;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pdf-export-checkbox,
+.pdf-export-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pdf-export-checkbox input {
+  flex: 0 0 auto;
+}
+
+.pdf-export-field {
+  justify-content: space-between;
+}
+
+.pdf-export-field select {
+  min-width: 120px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 5px 8px;
+  background: #ffffff;
+}
+
+.pdf-export-error {
+  margin: 0 18px;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pdf-export-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #d8e0e8;
+  padding: 12px 18px;
+}
+
+.pdf-export-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .properties-header {
   display: flex;
   align-items: center;

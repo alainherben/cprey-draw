@@ -27,6 +27,7 @@ interface ToolbarProps {
   onSaveProject: () => void;
   onOpenNomenclature: () => void;
   onOpenValidation: () => void;
+  onOpenPdfExport: () => void;
   onStartElectricalPanelPlacement: () => void;
   onStartOctopusPlacement: (modelId: OctopusModelId) => void;
   onStartApparatusPlacement: (catalogId: ApparatusCatalogId) => void;
@@ -64,6 +65,7 @@ export function Toolbar({
   onSaveProject,
   onOpenNomenclature,
   onOpenValidation,
+  onOpenPdfExport,
   onStartElectricalPanelPlacement,
   onStartOctopusPlacement,
   onStartApparatusPlacement,
@@ -126,6 +128,7 @@ export function Toolbar({
           onToggle={setOpenMenu}
         >
           <MenuItem label="Sauvegarder" onSelect={() => runAndClose(onSaveProject)} />
+          <MenuItem label="Exporter en PDF" onSelect={() => runAndClose(onOpenPdfExport)} />
           <MenuItem label="Nomenclature" onSelect={() => runAndClose(onOpenNomenclature)} />
           <MenuItem label="Contrôles" onSelect={() => runAndClose(onOpenValidation)} />
         </MenuButton>

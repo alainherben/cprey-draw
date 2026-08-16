@@ -5,6 +5,7 @@ import { Toolbar } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { NomenclaturePanel } from './NomenclaturePanel';
 import { ValidationPanel } from './ValidationPanel';
+import { PdfExportDialog } from './PdfExportDialog';
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { ProjectStorage } from '../storage/ProjectStorage';
 import { CommandManager } from '../commands/CommandManager';
@@ -93,6 +94,8 @@ import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
 import { getObjectDisplayLevel, getOctopusDisplayLevel } from '../domain/display';
 import { buildProjectNomenclature } from '../domain/bom';
 import { validateProject, type ProjectIssue } from '../domain/projectValidation';
+import { exportProjectPdf } from '../export/pdf/PdfExporter';
+import type { PdfExportOptions } from '../export/pdf/PdfTypes';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -239,6 +242,9 @@ export function DrawingCanvas() {
   const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(true);
   const [isNomenclatureOpen, setIsNomenclatureOpen] = useState(false);
   const [isValidationOpen, setIsValidationOpen] = useState(false);
+  const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -1177,6 +1183,23 @@ export function DrawingCanvas() {
     return null;
   }, [activeTool, measureDraft.end, measureDraft.start, scaleDraft.end, scaleDraft.start]);
 
+  const handlePdfExport = useCallback(
+    async (options: PdfExportOptions) => {
+      setIsPdfGenerating(true);
+      setPdfExportError(null);
+      try {
+        await exportProjectPdf(project, options);
+        setIsPdfExportOpen(false);
+      } catch (error) {
+        console.error(error);
+        setPdfExportError('Impossible de générer le PDF.');
+      } finally {
+        setIsPdfGenerating(false);
+      }
+    },
+    [project],
+  );
+
   return (
     <div className="app-shell">
       <Toolbar
@@ -1207,6 +1230,10 @@ export function DrawingCanvas() {
         }}
         onOpenNomenclature={() => setIsNomenclatureOpen(true)}
         onOpenValidation={() => setIsValidationOpen(true)}
+        onOpenPdfExport={() => {
+          setPdfExportError(null);
+          setIsPdfExportOpen(true);
+        }}
         onUndo={() => commandManager.undo()}
         onRedo={() => commandManager.redo()}
         onStartElectricalPanelPlacement={() => {
@@ -1754,6 +1781,18 @@ export function DrawingCanvas() {
             onLocateIssue={locateValidationIssue}
           />
         )}
+
+        <PdfExportDialog
+          isOpen={isPdfExportOpen}
+          isGenerating={isPdfGenerating}
+          error={pdfExportError}
+          onClose={() => {
+            if (!isPdfGenerating) {
+              setIsPdfExportOpen(false);
+            }
+          }}
+          onExport={handlePdfExport}
+        />
       </main>
     </div>
   );
