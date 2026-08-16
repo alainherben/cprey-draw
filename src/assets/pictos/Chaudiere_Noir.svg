@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="Calque_2"
+   viewBox="0 0 150 150"
+   version="1.1"
+   sodipodi:docname="Chaudiere_Gris.svg"
+   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview22"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.5733333"
+     inkscape:cx="-14.300847"
+     inkscape:cy="69.915254"
+     inkscape:window-width="1463"
+     inkscape:window-height="456"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Calque_2" />
+  <defs
+     id="defs4">
+    <style
+       id="style2">.cls-1{fill:none;}.cls-2{fill:#d7d7d7;}</style>
+  </defs>
+  <path
+     class="cls-2"
+     d="M 95.82,20.81 H 54.18 c -7.48,0 -13.57,6.09 -13.57,13.57 v 81.24 c 0,7.48 6.09,13.57 13.57,13.57 h 41.63 c 7.48,0 13.57,-6.09 13.57,-13.57 V 34.38 c 0,-7.48 -6.09,-13.57 -13.57,-13.57 z m 11.07,94.82 c 0,6.1 -4.96,11.07 -11.07,11.07 H 54.18 c -6.1,0 -11.07,-4.96 -11.07,-11.07 V 34.38 c 0,-6.1 4.96,-11.07 11.07,-11.07 h 41.63 c 6.1,0 11.07,4.96 11.07,11.07 v 81.24 z"
+     id="path6"
+     style="fill:#000000" />
+  <path
+     class="cls-2"
+     d="m 87.52,78.13 c 0.44,-0.53 0.36,-1.32 -0.17,-1.76 -0.53,-0.44 -1.32,-0.36 -1.76,0.17 -6.48,7.88 -3.33,12.03 -0.56,15.7 2.5,3.31 4.66,6.16 0.5,12.22 -0.39,0.57 -0.25,1.35 0.32,1.74 0.22,0.15 0.46,0.22 0.71,0.22 0.4,0 0.79,-0.19 1.03,-0.54 5.18,-7.54 1.99,-11.76 -0.57,-15.14 -2.64,-3.49 -4.72,-6.25 0.5,-12.6 z"
+     id="path8"
+     style="fill:#000000" />
+  <path
+     class="cls-2"
+     d="m 76.18,78.13 c 0.44,-0.53 0.36,-1.32 -0.17,-1.76 -0.53,-0.44 -1.32,-0.36 -1.76,0.17 -6.48,7.88 -3.33,12.03 -0.56,15.7 2.5,3.31 4.66,6.16 0.5,12.22 -0.39,0.57 -0.25,1.35 0.32,1.74 0.22,0.15 0.46,0.22 0.71,0.22 0.4,0 0.79,-0.19 1.03,-0.54 5.18,-7.54 1.99,-11.76 -0.57,-15.14 -2.64,-3.49 -4.72,-6.25 0.5,-12.6 z"
+     id="path10"
+     style="fill:#000000" />
+  <path
+     class="cls-2"
+     d="m 64.84,78.13 c 0.44,-0.53 0.36,-1.32 -0.17,-1.76 -0.53,-0.44 -1.32,-0.36 -1.76,0.17 -6.48,7.88 -3.33,12.03 -0.56,15.7 2.5,3.31 4.66,6.16 0.5,12.22 -0.39,0.57 -0.25,1.35 0.32,1.74 0.22,0.15 0.46,0.22 0.71,0.22 0.4,0 0.79,-0.19 1.03,-0.54 5.18,-7.54 1.99,-11.76 -0.57,-15.14 -2.64,-3.49 -4.72,-6.25 0.5,-12.6 z"
+     id="path12"
+     style="fill:#000000" />
+  <rect
+     class="cls-1"
+     width="150"
+     height="150"
+     id="rect16"
+     x="0"
+     y="0" />
+</svg>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="Calque_2"
+   viewBox="0 0 150 150"
+   version="1.1"
+   sodipodi:docname="PortailFermer_Gris.svg"
+   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview412"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.5733333"
+     inkscape:cx="-20.021186"
+     inkscape:cy="75"
+     inkscape:window-width="1463"
+     inkscape:window-height="456"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Calque_2" />
+  <defs
+     id="defs402">
+    <style
+       id="style400">.cls-1{fill:none;}.cls-2{fill:#d7d7d7;}</style>
+  </defs>
+  <path
+     class="cls-2"
+     d="m 75,33.09 v 0 C 51.89,33.09 33.09,51.89 33.09,75 v 27.99 c 0,7.68 6.25,13.92 13.92,13.92 h 55.97 c 7.68,0 13.92,-6.24 13.92,-13.92 V 75 C 116.9,51.89 98.1,33.09 74.99,33.09 Z m -39.41,69.9 V 75 c 0,-21.31 17,-38.71 38.16,-39.37 V 77.84 H 62.49 c -0.69,0 -1.25,0.56 -1.25,1.25 0,0.69 0.56,1.25 1.25,1.25 h 11.26 v 34.07 H 47.02 c -6.3,0 -11.42,-5.12 -11.42,-11.42 z m 78.81,0 c 0,6.3 -5.12,11.42 -11.42,11.42 H 76.24 v -34.1 c 0,0 0.09,0.03 0.14,0.03 h 12.51 c 0.69,0 1.25,-0.56 1.25,-1.25 0,-0.69 -0.56,-1.25 -1.25,-1.25 H 76.38 c 0,0 -0.09,0.02 -0.14,0.03 V 35.63 C 97.39,36.29 114.4,53.69 114.4,75 Z"
+     id="path404"
+     style="fill:#000000" />
+  <rect
+     class="cls-1"
+     width="150"
+     height="150"
+     id="rect406"
+     x="0"
+     y="0" />
+</svg>

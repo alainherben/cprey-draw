@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="Calque_2"
+   viewBox="0 0 150 150"
+   version="1.1"
+   sodipodi:docname="InterrupteurFermer_Gris.svg"
+   inkscape:version="1.2.2 (b0a84865, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview18"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="3.1466667"
+     inkscape:cx="82.309322"
+     inkscape:cy="68.167373"
+     inkscape:window-width="1536"
+     inkscape:window-height="677"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Calque_2" />
+  <defs
+     id="defs4">
+    <style
+       id="style2">.cls-1{fill:none;}.cls-2{fill:#d7d7d7;}</style>
+  </defs>
+  <g
+     id="g14"
+     inkscape:transform-center-x="-8.5805085"
+     inkscape:transform-center-y="-2.2245763">
+    <g
+       id="g10">
+      <path
+         class="cls-2"
+         d="M 102.99,33.09 H 47.01 c -7.68,0 -13.92,6.24 -13.92,13.92 v 55.97 c 0,7.68 6.24,13.92 13.92,13.92 h 55.97 c 7.68,0 13.92,-6.24 13.92,-13.92 V 47.01 c 0,-7.68 -6.24,-13.92 -13.92,-13.92 z m 11.42,69.89 c 0,6.3 -5.12,11.42 -11.42,11.42 H 47.01 c -6.3,0 -11.42,-5.12 -11.42,-11.42 V 47.01 c 0,-6.3 5.12,-11.42 11.42,-11.42 h 55.97 c 6.3,0 11.42,5.12 11.42,11.42 v 55.97 z"
+         id="path6" />
+      <path
+         class="cls-2"
+         d="m 59.745762,49.73 c -7.17,0 -13,5.83 -13,13 v 24.53 c 0,7.17 5.83,13 13,13 7.17,0 13,-5.83 13,-13 V 62.73 c 0,-7.17 -5.83,-13 -13,-13 z m 0,48.04 c -5.79,0 -10.5,-4.71 -10.5,-10.5 0,-5.79 4.71,-10.5 10.5,-10.5 5.79,0 10.5,4.71 10.5,10.5 0,5.79 -4.71,10.5 -10.5,10.5 z m 10.5,-18.14 c -2.37,-3.25 -6.19,-5.37 -10.5,-5.37 -4.31,0 -8.14,2.12 -10.5,5.37 V 62.74 c 0,-5.79 4.71,-10.5 10.5,-10.5 5.79,0 10.5,4.71 10.5,10.5 z"
+         id="path8" />
+      <path
+         class="cls-2"
+         d="m 89.936442,49.735 c -7.17,0 -13,5.83 -13,13 v 24.53 c 0,7.17 5.83,13 13,13 7.17,0 12.999998,-5.83 12.999998,-13 v -24.53 c 0,-7.17 -5.829998,-13 -12.999998,-13 z m 0,48.04 c -5.79,0 -10.5,-4.71 -10.5,-10.5 0,-5.79 4.71,-10.5 10.5,-10.5 5.79,0 10.499998,4.71 10.499998,10.5 0,5.79 -4.709998,10.5 -10.499998,10.5 z m 10.499998,-18.14 c -2.369998,-3.25 -6.189998,-5.37 -10.499998,-5.37 -4.31,0 -8.14,2.12 -10.5,5.37 v -16.89 c 0,-5.79 4.71,-10.5 10.5,-10.5 5.79,0 10.499998,4.71 10.499998,10.5 z"
+         id="path8-0"
+         style="fill:#d7d7d7" />
+    </g>
+    <rect
+       class="cls-1"
+       width="150"
+       height="150"
+       id="rect12"
+       x="0"
+       y="0" />
+  </g>
+</svg>
