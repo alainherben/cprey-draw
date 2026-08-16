@@ -42,6 +42,7 @@ import {
   createMoveDuctControlCommand,
   createMoveDuctWaypointCommand,
   createResetDuctControlCommand,
+  createUpdateDuctSpecificationCommand,
 } from '../commands/connections/ConnectionCommands';
 import {
   createApparatusInstance,
@@ -99,6 +100,7 @@ import type {
   ConnectionTargetType,
   CpreyDrawProject,
   Duct,
+  DuctSpecification,
   ElectricalPanel,
   Octopus,
   OctopusOutputOverride,
@@ -1096,6 +1098,20 @@ export function DrawingCanvas() {
     [commandManager, project],
   );
 
+  const updateDuctSpecification = useCallback(
+    (ductId: string, specification: DuctSpecification) => {
+      commandManager.execute(
+        createUpdateDuctSpecificationCommand(
+          project,
+          ductId,
+          specification,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    },
+    [commandManager, project],
+  );
+
   const addDuctWaypoint = useCallback(
     (ductId: string, position: Point | null = null) => {
       const duct = project.ducts.find((currentDuct) => currentDuct.id === ductId);
@@ -1720,6 +1736,7 @@ export function DrawingCanvas() {
           onCreateDirectPanelConnection={createDirectPanelConnection}
           onAddDuctWaypoint={addDuctWaypoint}
           onResetDuctControl={resetDuctControl}
+          onUpdateDuctSpecification={updateDuctSpecification}
           onDeleteDuct={deleteDuct}
         />
 

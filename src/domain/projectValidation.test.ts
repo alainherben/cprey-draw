@@ -250,6 +250,48 @@ test('reports direct ducts without specification and validates cooktop direct sn
   assert.ok(invalidCooktopResult.issues.some((issue) => issue.code === 'DIRECT_DUCT_SPECIFICATION_MISMATCH' && issue.severity === 'error'));
 });
 
+test('accepts manual direct duct specification for RJ45, antenna and WiFi without conductors', () => {
+  const panel = createElectricalPanel({ x: 100, y: 100 });
+  const rj45 = createApparatusInstance('prise-rj45', { x: 160, y: 100 }, []);
+  const antenna = createApparatusInstance('prise-antenne', { x: 180, y: 100 }, [rj45]);
+  const wifi = createApparatusInstance('wifi', { x: 200, y: 100 }, [rj45, antenna]);
+  const project = {
+    ...baseProject(),
+    electricalPanel: panel,
+    apparatus: [rj45, antenna, wifi],
+  };
+  const ducts = [
+    mustDuct(createDirectPanelDuct(project, panel.id, rj45.id)),
+    mustDuct(createDirectPanelDuct(project, panel.id, antenna.id)),
+    mustDuct(createDirectPanelDuct(project, panel.id, wifi.id)),
+  ];
+  const missingResult = validateProject({ ...project, ducts });
+  const specifiedDucts = ducts.map((duct, index) => ({
+    ...duct,
+    specification: {
+      ...duct.specification,
+      diameterMm: 20 as const,
+      availableLengthMeters: 10 + index,
+      contentDescription: index === 0 ? 'Câble RJ45' : index === 1 ? 'Câble coaxial TV' : 'Câble réseau WiFi',
+      conductors: [],
+    },
+  }));
+  const specifiedResult = validateProject({ ...project, ducts: specifiedDucts });
+
+  assert.equal(
+    missingResult.issues.filter((issue) => issue.code === 'DIRECT_DUCT_SPECIFICATION_MISSING').length,
+    3,
+  );
+  assert.equal(
+    specifiedResult.issues.some((issue) => issue.code === 'DIRECT_DUCT_SPECIFICATION_MISSING'),
+    false,
+  );
+  assert.equal(
+    specifiedResult.issues.some((issue) => issue.code === 'DUCT_CONDUCTORS_MISSING'),
+    false,
+  );
+});
+
 test('allows duplicate identifiers between different octopus contexts', () => {
   const kitchen = createOctopus('kitchen', { x: 100, y: 100 }, []);
   const bath = createOctopus('bath', { x: 300, y: 100 }, [kitchen]);

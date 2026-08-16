@@ -29,6 +29,7 @@ import {
   createMoveDuctControlCommand,
   createMoveDuctWaypointCommand,
   createResetDuctControlCommand,
+  createUpdateDuctSpecificationCommand,
 } from './ConnectionCommands';
 
 function createConnectionProject(): CpreyDrawProject {
@@ -175,6 +176,46 @@ test('creates a direct electrical panel duct to RJ45 without invented specificat
 
   assert.equal(result.duct.specification.diameterMm, undefined);
   assert.deepEqual(result.duct.specification.conductors, []);
+});
+
+test('updates direct duct specification with undo and redo', () => {
+  let project = createConnectionProject();
+  const rj45 = createApparatusInstance('prise-rj45', { x: 240, y: 180 }, []);
+  project = { ...project, apparatus: [rj45] };
+  const result = createDirectPanelDuct(project, project.electricalPanel?.id ?? '', rj45.id);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  project = { ...project, ducts: [result.duct] };
+  const command = createUpdateDuctSpecificationCommand(
+    project,
+    result.duct.id,
+    {
+      ...result.duct.specification,
+      diameterMm: 20,
+      availableLengthMeters: 12.5,
+      linkColor: 'Bleu',
+      contentDescription: 'Câble RJ45',
+      conductors: [],
+    },
+    (nextProject) => {
+      project = nextProject;
+    },
+  );
+
+  command.execute();
+  assert.equal(project.ducts[0]?.specification.diameterMm, 20);
+  assert.equal(project.ducts[0]?.specification.availableLengthMeters, 12.5);
+  assert.equal(project.ducts[0]?.specification.contentDescription, 'Câble RJ45');
+
+  command.undo();
+  assert.equal(project.ducts[0]?.specification.diameterMm, undefined);
+  assert.equal(project.ducts[0]?.specification.contentDescription, undefined);
+
+  command.redo();
+  assert.equal(project.ducts[0]?.specification.diameterMm, 20);
 });
 
 test('refuses free outputs, reused outputs and already connected apparatus', () => {

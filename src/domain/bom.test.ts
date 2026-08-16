@@ -152,6 +152,34 @@ test('counts adapters from actual ducts and lists direct ducts without specifica
   assert.equal(nomenclature.ducts.directUnspecified[0]?.apparatusLabel.includes('Prise RJ45'), true);
 });
 
+test('counts manually specified direct communication ducts by diameter without inventing conductors', () => {
+  const project = createBomProject();
+  const specifiedProject = {
+    ...project,
+    ducts: project.ducts.map((duct) =>
+      duct.source.type === 'electrical-panel' && duct.target.type === 'apparatus' && !duct.specification.diameterMm
+        ? {
+            ...duct,
+            specification: {
+              ...duct.specification,
+              diameterMm: 20 as const,
+              availableLengthMeters: 12.5,
+              contentDescription: 'Câble RJ45',
+              conductors: [],
+            },
+          }
+        : duct,
+    ),
+  };
+  const nomenclature = buildProjectNomenclature(specifiedProject);
+  const diameter20 = nomenclature.ducts.byDiameter.find((item) => item.diameterMm === 20);
+
+  assert.equal(nomenclature.ducts.directUnspecified.length, 0);
+  assert.ok(diameter20);
+  assert.equal(diameter20?.availableLengthMeters, 34.5);
+  assert.equal(nomenclature.conductors.some((item) => item.color === 'Câble RJ45'), false);
+});
+
 test('detects overruns and ignores visibility and layers in totals', () => {
   const hiddenProject = createBomProject();
   const visibleProject = {

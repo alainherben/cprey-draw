@@ -1,4 +1,4 @@
-import type { CpreyDrawProject, Duct, DuctControlPoint, DuctWaypoint, Point } from '../../types/project';
+import type { CpreyDrawProject, Duct, DuctControlPoint, DuctSpecification, DuctWaypoint, Point } from '../../types/project';
 import type { ApplyProject } from '../CommandManager';
 import { ProjectSnapshotCommand } from '../ProjectSnapshotCommand';
 import { getSynchronizableApparatusIdentifierFromDuct } from '../../domain/ducts';
@@ -44,6 +44,30 @@ export function createDeleteConnectionCommand(
 
 export const createAddDuctCommand = createAddConnectionCommand;
 export const createDeleteDuctCommand = createDeleteConnectionCommand;
+
+export function createUpdateDuctSpecificationCommand(
+  before: CpreyDrawProject,
+  ductId: string,
+  specification: DuctSpecification,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  const after: CpreyDrawProject = {
+    ...before,
+    ducts: before.ducts.map((duct) =>
+      duct.id === ductId
+        ? {
+            ...duct,
+            specification: {
+              ...specification,
+              conductors: specification.conductors.map((conductor) => ({ ...conductor })),
+            },
+          }
+        : duct,
+    ),
+  };
+
+  return new ProjectSnapshotCommand('Modifier la spécification de gaine', before, after, applyProject);
+}
 
 export function createAddDuctWaypointCommand(
   before: CpreyDrawProject,

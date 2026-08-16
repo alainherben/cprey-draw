@@ -346,6 +346,7 @@ function validateDuctCompatibility(project: CpreyDrawProject, duct: Duct): Proje
     const targetApparatus = findApparatus(project, duct.target.id);
     if (targetApparatus) {
       const catalogItem = getApparatusCatalogItem(targetApparatus.catalogId);
+      const directDuctSpecification = catalogItem.directDuctSpecification;
       if (!catalogItem.directSupply) {
         issues.push(issue({
           id: `direct-supply-invalid:${duct.id}`,
@@ -357,7 +358,7 @@ function validateDuctCompatibility(project: CpreyDrawProject, duct: Duct): Proje
           entityId: duct.id,
           relatedEntityIds: [targetApparatus.id],
         }));
-      } else if (!catalogItem.directDuctSpecification) {
+      } else if (!directDuctSpecification && !isManualDirectDuctSpecificationProvided(duct)) {
         issues.push(issue({
           id: `direct-spec-missing:${duct.id}`,
           code: 'DIRECT_DUCT_SPECIFICATION_MISSING',
@@ -368,7 +369,7 @@ function validateDuctCompatibility(project: CpreyDrawProject, duct: Duct): Proje
           entityId: duct.id,
           relatedEntityIds: [targetApparatus.id],
         }));
-      } else if (!matchesDirectSpecification(duct, catalogItem.directDuctSpecification)) {
+      } else if (directDuctSpecification && !matchesDirectSpecification(duct, directDuctSpecification)) {
         issues.push(issue({
           id: `direct-spec-mismatch:${duct.id}`,
           code: 'DIRECT_DUCT_SPECIFICATION_MISMATCH',
@@ -389,11 +390,7 @@ function validateDuctCompatibility(project: CpreyDrawProject, duct: Duct): Proje
 function validateDuctSpecification(project: CpreyDrawProject, duct: Duct): ProjectIssue[] {
   const issues: ProjectIssue[] = [];
   const diameter = duct.specification.diameterMm;
-  const isDirectWithoutSpecification =
-    duct.source.type === 'electrical-panel' &&
-    duct.target.type === 'apparatus' &&
-    diameter === undefined &&
-    duct.specification.conductors.length === 0;
+  const isDirectPanelDuct = duct.source.type === 'electrical-panel' && duct.target.type === 'apparatus';
 
   if (diameter !== undefined && !VALID_DUCT_DIAMETERS.includes(diameter)) {
     issues.push(issue({
@@ -407,7 +404,7 @@ function validateDuctSpecification(project: CpreyDrawProject, duct: Duct): Proje
     }));
   }
 
-  if (!isDirectWithoutSpecification && diameter !== undefined && duct.specification.conductors.length === 0) {
+  if (!isDirectPanelDuct && diameter !== undefined && duct.specification.conductors.length === 0) {
     issues.push(issue({
       id: `duct-no-conductors:${duct.id}`,
       code: 'DUCT_CONDUCTORS_MISSING',
@@ -451,6 +448,10 @@ function validateDuctSpecification(project: CpreyDrawProject, duct: Duct): Proje
   }
 
   return issues;
+}
+
+function isManualDirectDuctSpecificationProvided(duct: Duct): boolean {
+  return duct.specification.diameterMm !== undefined;
 }
 
 function validateDuctLength(project: CpreyDrawProject, duct: Duct): ProjectIssue[] {

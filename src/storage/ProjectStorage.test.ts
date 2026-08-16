@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createApparatusInstance } from '../domain/apparatus';
 import { createConnection } from '../domain/connections';
 import { buildQuadraticDuctGeometry, createDuctControlPoint } from '../domain/ductGeometry';
+import { createDirectPanelDuct } from '../domain/ducts';
 import { createElectricalPanel } from '../domain/electricalPanel';
 import { createOctopus } from '../domain/octopus';
 import { createOctopusOutputOverride, upsertOctopusOutputOverride } from '../domain/octopusOutputs';
@@ -338,6 +339,62 @@ test('saves duct editable geometry and rebuilds identical quadratic geometry aft
   );
   assert.equal(afterGeometry?.pathData, beforeGeometry?.pathData);
   assert.equal(afterGeometry?.lengthMeters, beforeGeometry?.lengthMeters);
+});
+
+test('saves and restores manual direct duct specification', () => {
+  const storage = new Map<string, string>();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+        },
+      },
+    },
+  });
+
+  const electricalPanel = createElectricalPanel({ x: 20, y: 20 });
+  const rj45 = createApparatusInstance('prise-rj45', { x: 100, y: 100 }, []);
+  const baseProject = {
+    ...createEmptyProject(),
+    drawing: { ...createEmptyProject().drawing, metersPerPixel: 0.01 },
+    electricalPanel,
+    apparatus: [rj45],
+  };
+  const result = createDirectPanelDuct(baseProject, electricalPanel.id, rj45.id);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const project = {
+    ...baseProject,
+    ducts: [{
+      ...result.duct,
+      specification: {
+        ...result.duct.specification,
+        diameterMm: 20 as const,
+        availableLengthMeters: 12.5,
+        linkColor: 'Bleu',
+        contentDescription: 'Câble RJ45',
+        conductors: [],
+      },
+    }],
+  };
+
+  ProjectStorage.save(project);
+  const restored = ProjectStorage.load();
+
+  assert.equal(restored.ducts[0]?.specification.diameterMm, 20);
+  assert.equal(restored.ducts[0]?.specification.availableLengthMeters, 12.5);
+  assert.equal(restored.ducts[0]?.specification.linkColor, 'Bleu');
+  assert.equal(restored.ducts[0]?.specification.contentDescription, 'Câble RJ45');
+  assert.deepEqual(restored.ducts[0]?.specification.conductors, []);
 });
 
 test('migrates legacy connections to ducts with catalog snapshot', () => {

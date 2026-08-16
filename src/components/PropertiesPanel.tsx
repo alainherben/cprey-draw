@@ -32,7 +32,9 @@ import type {
   ApparatusInstance,
   ConnectionTargetType,
   Duct,
+  DuctConductor,
   DuctEndpoint,
+  DuctSpecification,
   ElectricalPanel,
   Octopus,
   OctopusOutputOverride,
@@ -99,6 +101,7 @@ interface PropertiesPanelProps {
   onCreateDirectPanelConnection: (apparatusId: string) => void;
   onAddDuctWaypoint: (ductId: string) => void;
   onResetDuctControl: (ductId: string, controlId: string) => void;
+  onUpdateDuctSpecification: (ductId: string, specification: DuctSpecification) => void;
   onDeleteDuct: (ductId: string) => void;
 }
 
@@ -283,6 +286,7 @@ export function PropertiesPanel({
   onCreateDirectPanelConnection,
   onAddDuctWaypoint,
   onResetDuctControl,
+  onUpdateDuctSpecification,
   onDeleteDuct,
 }: PropertiesPanelProps) {
   const [draftName, setDraftName] = useState('');
@@ -294,6 +298,12 @@ export function PropertiesPanel({
   const [selectedOutputNumber, setSelectedOutputNumber] = useState(1);
   const [overrideDraft, setOverrideDraft] = useState<OctopusOutputOverride | null>(null);
   const [overrideError, setOverrideError] = useState('');
+  const [ductDiameterDraft, setDuctDiameterDraft] = useState('20');
+  const [ductAvailableLengthDraft, setDuctAvailableLengthDraft] = useState('0');
+  const [ductLinkColorDraft, setDuctLinkColorDraft] = useState('Noir');
+  const [ductContentDescriptionDraft, setDuctContentDescriptionDraft] = useState('');
+  const [ductConductorDrafts, setDuctConductorDrafts] = useState<DuctConductor[]>([]);
+  const [ductSpecificationError, setDuctSpecificationError] = useState('');
 
   useEffect(() => {
     setDraftName(selectedObject?.name ?? '');
@@ -327,11 +337,28 @@ export function PropertiesPanel({
     setOverrideError('');
   }, [selectedObject?.id]);
 
+  useEffect(() => {
+    setDuctDiameterDraft(String(selectedDuct?.specification.diameterMm ?? 20));
+    setDuctAvailableLengthDraft(String(selectedDuct?.specification.availableLengthMeters ?? 0));
+    setDuctLinkColorDraft(selectedDuct?.specification.linkColor ?? 'Noir');
+    setDuctContentDescriptionDraft(selectedDuct?.specification.contentDescription ?? '');
+    setDuctConductorDrafts(selectedDuct?.specification.conductors.map((conductor) => ({ ...conductor })) ?? []);
+    setDuctSpecificationError('');
+  }, [
+    selectedDuct?.id,
+    selectedDuct?.specification.availableLengthMeters,
+    selectedDuct?.specification.contentDescription,
+    selectedDuct?.specification.diameterMm,
+    selectedDuct?.specification.linkColor,
+    selectedDuct?.specification.conductors,
+  ]);
+
   if (!selectedObject && !selectedDuct) {
     return null;
   }
 
   if (selectedDuct) {
+    const isDirectPanelDuct = selectedDuct.source.type === 'electrical-panel' && selectedDuct.target.type === 'apparatus';
     const sourceOctopusOutput = getDuctSourceOctopusOutput(selectedDuct);
     const circuitOriginLabel =
       selectedDuct.circuitOrigin.type === 'octopus-output'
@@ -343,6 +370,55 @@ export function PropertiesPanel({
       selectedDuct.specification.availableLengthMeters,
       usedLengthMeters,
     );
+    const saveDirectDuctSpecification = () => {
+      const diameterMm = Number(ductDiameterDraft);
+      const availableLengthMeters = Number(ductAvailableLengthDraft);
+      if (![16, 20, 25].includes(diameterMm)) {
+        setDuctSpecificationError('Diamètre invalide.');
+        return;
+      }
+      if (!Number.isFinite(availableLengthMeters) || availableLengthMeters < 0) {
+        setDuctSpecificationError('Longueur disponible positive ou nulle obligatoire.');
+        return;
+      }
+      if (!ductLinkColorDraft.trim()) {
+        setDuctSpecificationError('Couleur de liaison obligatoire.');
+        return;
+      }
+
+      const conductors = ductConductorDrafts.map((conductor, index) => ({
+        ...conductor,
+        order: index + 1,
+      }));
+      for (const conductor of conductors) {
+        if (!Number.isInteger(conductor.quantity) || conductor.quantity <= 0) {
+          setDuctSpecificationError('Quantité conducteur invalide.');
+          return;
+        }
+        if (!conductor.color.trim()) {
+          setDuctSpecificationError('Couleur conducteur obligatoire.');
+          return;
+        }
+        if (!conductor.function.trim()) {
+          setDuctSpecificationError('Fonction conducteur obligatoire.');
+          return;
+        }
+        if (![1.5, 2.5, 6].includes(conductor.sectionMm2)) {
+          setDuctSpecificationError('Section conducteur invalide.');
+          return;
+        }
+      }
+
+      setDuctSpecificationError('');
+      onUpdateDuctSpecification(selectedDuct.id, {
+        ...selectedDuct.specification,
+        diameterMm: diameterMm as 16 | 20 | 25,
+        availableLengthMeters,
+        linkColor: ductLinkColorDraft.trim(),
+        contentDescription: ductContentDescriptionDraft.trim() || undefined,
+        conductors,
+      });
+    };
 
     return (
       <aside className="properties-panel" aria-label="Propriétés de la gaine sélectionnée">
@@ -416,6 +492,12 @@ export function PropertiesPanel({
             <span>Couleur liaison</span>
             <strong>{selectedDuct.specification.linkColor}</strong>
           </div>
+          {selectedDuct.specification.contentDescription && (
+            <div>
+              <span>Contenu</span>
+              <strong>{selectedDuct.specification.contentDescription}</strong>
+            </div>
+          )}
           <div>
             <span>Courbes</span>
             <strong>{selectedDuct.waypoints.length + 1}</strong>
@@ -446,6 +528,156 @@ export function PropertiesPanel({
         >
           Réinitialiser la courbe
         </button>
+
+        {isDirectPanelDuct && (
+          <div className="duct-specification-editor">
+            <h5>Spécification de la gaine</h5>
+            <label className="property-field">
+              <span>Diamètre de gaine</span>
+              <select
+                value={ductDiameterDraft}
+                disabled={selectedDuct.locked}
+                onChange={(event) => setDuctDiameterDraft(event.currentTarget.value)}
+              >
+                <option value="16">16 mm</option>
+                <option value="20">20 mm</option>
+                <option value="25">25 mm</option>
+              </select>
+            </label>
+            <label className="property-field">
+              <span>Longueur disponible (m)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={ductAvailableLengthDraft}
+                disabled={selectedDuct.locked}
+                onChange={(event) => setDuctAvailableLengthDraft(event.currentTarget.value)}
+              />
+            </label>
+            <label className="property-field">
+              <span>Couleur liaison</span>
+              <select
+                value={ductLinkColorDraft}
+                disabled={selectedDuct.locked}
+                onChange={(event) => setDuctLinkColorDraft(event.currentTarget.value)}
+              >
+                {Object.keys(LINK_COLOR_CSS).map((color) => (
+                  <option key={color} value={color}>{color}</option>
+                ))}
+              </select>
+            </label>
+            <label className="property-field">
+              <span>Description du contenu</span>
+              <input
+                value={ductContentDescriptionDraft}
+                disabled={selectedDuct.locked}
+                placeholder="Ex. Câble RJ45"
+                onChange={(event) => setDuctContentDescriptionDraft(event.currentTarget.value)}
+              />
+            </label>
+
+            <div className="conductors-editor">
+              <div className="section-heading-row">
+                <h5>Conducteurs / contenu électrique</h5>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={selectedDuct.locked}
+                  onClick={() => {
+                    setDuctConductorDrafts((current) => [
+                      ...current,
+                      {
+                        order: current.length + 1,
+                        quantity: 1,
+                        function: '',
+                        color: '',
+                        sectionMm2: 1.5,
+                      },
+                    ]);
+                  }}
+                >
+                  Ajouter
+                </button>
+              </div>
+              {ductConductorDrafts.length === 0 && (
+                <p className="connection-action-note">Aucun conducteur électrique renseigné.</p>
+              )}
+              {ductConductorDrafts.map((conductor, index) => (
+                <div className="duct-conductor-editor-row" key={`${conductor.order}-${index}`}>
+                  <input
+                    type="number"
+                    min="1"
+                    value={conductor.quantity}
+                    disabled={selectedDuct.locked}
+                    title="Quantité"
+                    onChange={(event) => {
+                      const quantity = Math.max(1, Math.round(Number(event.currentTarget.value) || 1));
+                      setDuctConductorDrafts((current) =>
+                        current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity } : item),
+                      );
+                    }}
+                  />
+                  <input
+                    value={conductor.function}
+                    disabled={selectedDuct.locked}
+                    placeholder="Fonction"
+                    onChange={(event) => {
+                      const nextFunction = event.currentTarget.value;
+                      setDuctConductorDrafts((current) =>
+                        current.map((item, itemIndex) => itemIndex === index ? { ...item, function: nextFunction } : item),
+                      );
+                    }}
+                  />
+                  <input
+                    value={conductor.color}
+                    disabled={selectedDuct.locked}
+                    placeholder="Couleur"
+                    onChange={(event) => {
+                      const color = event.currentTarget.value;
+                      setDuctConductorDrafts((current) =>
+                        current.map((item, itemIndex) => itemIndex === index ? { ...item, color } : item),
+                      );
+                    }}
+                  />
+                  <select
+                    value={String(conductor.sectionMm2)}
+                    disabled={selectedDuct.locked}
+                    onChange={(event) => {
+                      const sectionMm2 = Number(event.currentTarget.value) as 1.5 | 2.5 | 6;
+                      setDuctConductorDrafts((current) =>
+                        current.map((item, itemIndex) => itemIndex === index ? { ...item, sectionMm2 } : item),
+                      );
+                    }}
+                  >
+                    <option value="1.5">1,5</option>
+                    <option value="2.5">2,5</option>
+                    <option value="6">6</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="small-icon-button"
+                    disabled={selectedDuct.locked}
+                    onClick={() => setDuctConductorDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    aria-label="Supprimer ce conducteur"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {ductSpecificationError && <p className="form-error">{ductSpecificationError}</p>}
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={selectedDuct.locked}
+              onClick={saveDirectDuctSpecification}
+            >
+              Enregistrer la spécification
+            </button>
+          </div>
+        )}
 
         {selectedDuct.specification.conductors.length > 0 && (
           <div className="conductors-section">

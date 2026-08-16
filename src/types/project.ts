@@ -213,6 +213,7 @@ export interface DuctSpecification {
   capColor?: string;
   availableLengthMeters: number;
   linkColor: string;
+  contentDescription?: string;
   conductors: DuctConductor[];
 }
 

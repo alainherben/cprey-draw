@@ -1191,6 +1191,45 @@ button.active {
   gap: 6px;
 }
 
+.duct-specification-editor {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8e0e8;
+  border-radius: 7px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.duct-specification-editor h5,
+.section-heading-row h5 {
+  margin: 0;
+  color: #111827;
+  font-size: 12px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.duct-conductor-editor-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 0.85fr) 58px 28px;
+  gap: 5px;
+  align-items: center;
+}
+
+.duct-conductor-editor-row input,
+.duct-conductor-editor-row select {
+  min-width: 0;
+  border: 1px solid #b8c2cc;
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 11px;
+}
+
 .conductor-editor-row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) minmax(0, 0.85fr) 58px 28px;
