@@ -25,6 +25,7 @@ interface ToolbarProps {
   onToggleScaleMarkerVisible: () => void;
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
+  onOpenNomenclature: () => void;
   onStartElectricalPanelPlacement: () => void;
   onStartOctopusPlacement: (modelId: OctopusModelId) => void;
   onStartApparatusPlacement: (catalogId: ApparatusCatalogId) => void;
@@ -60,6 +61,7 @@ export function Toolbar({
   onToggleScaleMarkerVisible,
   onToggleLayerVisible,
   onSaveProject,
+  onOpenNomenclature,
   onStartElectricalPanelPlacement,
   onStartOctopusPlacement,
   onStartApparatusPlacement,
@@ -122,6 +124,7 @@ export function Toolbar({
           onToggle={setOpenMenu}
         >
           <MenuItem label="Sauvegarder" onSelect={() => runAndClose(onSaveProject)} />
+          <MenuItem label="Nomenclature" onSelect={() => runAndClose(onOpenNomenclature)} />
         </MenuButton>
 
         <MenuButton id="plan" label="Plan" openMenu={openMenu} onToggle={setOpenMenu}>

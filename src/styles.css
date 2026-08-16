@@ -452,6 +452,189 @@ button.active {
   width: min(480px, 100%);
 }
 
+.nomenclature-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.nomenclature-panel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: min(760px, 100%);
+  height: 100%;
+  border-left: 1px solid #b8c2cc;
+  background: #ffffff;
+  color: #1f2933;
+  box-shadow: -18px 0 44px rgba(15, 23, 42, 0.22);
+}
+
+.nomenclature-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #d8e0e8;
+  padding: 16px 18px;
+}
+
+.nomenclature-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.nomenclature-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.nomenclature-content {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 14px 18px 22px;
+}
+
+.nomenclature-section {
+  border: 1px solid #d8e0e8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.nomenclature-section summary {
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nomenclature-section-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.nomenclature-section h3,
+.nomenclature-card h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.nomenclature-card p {
+  margin: 3px 0 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.nomenclature-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.nomenclature-stat {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.nomenclature-stat span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nomenclature-stat strong {
+  color: #111827;
+  font-size: 16px;
+}
+
+.nomenclature-cards {
+  display: grid;
+  gap: 10px;
+}
+
+.nomenclature-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.nomenclature-card dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  margin: 0 0 10px;
+  font-size: 11px;
+}
+
+.nomenclature-card dt {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.nomenclature-card dd {
+  margin: 0;
+  color: #111827;
+  font-weight: 800;
+}
+
+.nomenclature-table-wrap {
+  overflow-x: auto;
+}
+
+.nomenclature-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.nomenclature-table th,
+.nomenclature-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.nomenclature-table th {
+  color: #475569;
+  font-weight: 800;
+  background: #f8fafc;
+}
+
+.nomenclature-table td {
+  color: #1f2933;
+}
+
+.nomenclature-table .danger-row td {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.nomenclature-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .properties-header {
   display: flex;
   align-items: center;

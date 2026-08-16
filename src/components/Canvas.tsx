@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Group, Image as KonvaImage, Layer, Line, Path, Rect, Stage, Text } from 'react-konva';
 import { Toolbar } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
+import { NomenclaturePanel } from './NomenclaturePanel';
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { ProjectStorage } from '../storage/ProjectStorage';
 import { CommandManager } from '../commands/CommandManager';
@@ -88,6 +89,7 @@ import {
 } from '../domain/octopus';
 import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
 import { getObjectDisplayLevel, getOctopusDisplayLevel } from '../domain/display';
+import { buildProjectNomenclature } from '../domain/bom';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -231,6 +233,7 @@ export function DrawingCanvas() {
   const [selectedDuctControlId, setSelectedDuctControlId] = useState<string | null>(null);
   const [isDraggingDuctHandle, setIsDraggingDuctHandle] = useState(false);
   const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(true);
+  const [isNomenclatureOpen, setIsNomenclatureOpen] = useState(false);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -246,6 +249,7 @@ export function DrawingCanvas() {
   const selectedApparatus = project.apparatus.find((apparatus) => apparatus.id === selectedObjectId) ?? null;
   const selectedDuct = project.ducts.find((duct) => duct.id === selectedObjectId) ?? null;
   const selectedBusinessObject = selectedElectricalPanel ?? selectedOctopus ?? selectedApparatus;
+  const nomenclature = useMemo(() => buildProjectNomenclature(project), [project]);
   const planImage = useHtmlImage(activePlan?.source ?? null);
   const octopusLogoImages: Record<OctopusModelId, HTMLImageElement | null> = {
     kitchen: useHtmlImage(OCTOPUS_LOGO_URLS.kitchen),
@@ -1159,6 +1163,7 @@ export function DrawingCanvas() {
           ProjectStorage.save(project);
           setSaveMessage('Projet sauvegardé');
         }}
+        onOpenNomenclature={() => setIsNomenclatureOpen(true)}
         onUndo={() => commandManager.undo()}
         onRedo={() => commandManager.redo()}
         onStartElectricalPanelPlacement={() => {
@@ -1690,6 +1695,13 @@ export function DrawingCanvas() {
           onResetDuctControl={resetDuctControl}
           onDeleteDuct={deleteDuct}
         />
+
+        {isNomenclatureOpen && (
+          <NomenclaturePanel
+            nomenclature={nomenclature}
+            onClose={() => setIsNomenclatureOpen(false)}
+          />
+        )}
       </main>
     </div>
   );
