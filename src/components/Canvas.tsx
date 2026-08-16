@@ -4,6 +4,7 @@ import { Circle, Group, Image as KonvaImage, Layer, Line, Path, Rect, Stage, Tex
 import { Toolbar } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
 import { NomenclaturePanel } from './NomenclaturePanel';
+import { ValidationPanel } from './ValidationPanel';
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { ProjectStorage } from '../storage/ProjectStorage';
 import { CommandManager } from '../commands/CommandManager';
@@ -90,6 +91,7 @@ import {
 import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
 import { getObjectDisplayLevel, getOctopusDisplayLevel } from '../domain/display';
 import { buildProjectNomenclature } from '../domain/bom';
+import { validateProject, type ProjectIssue } from '../domain/projectValidation';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -234,6 +236,7 @@ export function DrawingCanvas() {
   const [isDraggingDuctHandle, setIsDraggingDuctHandle] = useState(false);
   const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(true);
   const [isNomenclatureOpen, setIsNomenclatureOpen] = useState(false);
+  const [isValidationOpen, setIsValidationOpen] = useState(false);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -250,6 +253,7 @@ export function DrawingCanvas() {
   const selectedDuct = project.ducts.find((duct) => duct.id === selectedObjectId) ?? null;
   const selectedBusinessObject = selectedElectricalPanel ?? selectedOctopus ?? selectedApparatus;
   const nomenclature = useMemo(() => buildProjectNomenclature(project), [project]);
+  const validationResult = useMemo(() => validateProject(project), [project]);
   const planImage = useHtmlImage(activePlan?.source ?? null);
   const octopusLogoImages: Record<OctopusModelId, HTMLImageElement | null> = {
     kitchen: useHtmlImage(OCTOPUS_LOGO_URLS.kitchen),
@@ -313,6 +317,28 @@ export function DrawingCanvas() {
     },
     [activePlan, containerSize.height, containerSize.width, setViewport],
   );
+
+  const centerViewportOnPoint = useCallback((point: Point) => {
+    setViewport({
+      scale: viewport.scale,
+      x: containerSize.width / 2 - point.x * viewport.scale,
+      y: containerSize.height / 2 - point.y * viewport.scale,
+    });
+  }, [containerSize.height, containerSize.width, setViewport, viewport.scale]);
+
+  const locateValidationIssue = useCallback((issue: ProjectIssue) => {
+    const location = getIssueLocation(project, issue);
+    if (!location) {
+      return;
+    }
+
+    setSelectedObjectId(location.objectId);
+    setSelectedDuctWaypointId(null);
+    setSelectedDuctControlId(null);
+    setIsPropertiesPanelOpen(true);
+    setIsValidationOpen(false);
+    centerViewportOnPoint(location.point);
+  }, [centerViewportOnPoint, project]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1164,6 +1190,7 @@ export function DrawingCanvas() {
           setSaveMessage('Projet sauvegardé');
         }}
         onOpenNomenclature={() => setIsNomenclatureOpen(true)}
+        onOpenValidation={() => setIsValidationOpen(true)}
         onUndo={() => commandManager.undo()}
         onRedo={() => commandManager.redo()}
         onStartElectricalPanelPlacement={() => {
@@ -1702,9 +1729,66 @@ export function DrawingCanvas() {
             onClose={() => setIsNomenclatureOpen(false)}
           />
         )}
+
+        {isValidationOpen && (
+          <ValidationPanel
+            result={validationResult}
+            onClose={() => setIsValidationOpen(false)}
+            onLocateIssue={locateValidationIssue}
+          />
+        )}
       </main>
     </div>
   );
+}
+
+function getIssueLocation(
+  project: CpreyDrawProject,
+  issue: ProjectIssue,
+): { objectId: string; point: Point } | null {
+  if (issue.entityType === 'octopus-output' && issue.octopusId) {
+    const octopus = project.octopuses.find((candidate) => candidate.id === issue.octopusId);
+    return octopus ? { objectId: octopus.id, point: { x: octopus.x, y: octopus.y } } : null;
+  }
+
+  if (issue.entityType === 'octopus' && issue.entityId) {
+    const octopus = project.octopuses.find((candidate) => candidate.id === issue.entityId);
+    return octopus ? { objectId: octopus.id, point: { x: octopus.x, y: octopus.y } } : null;
+  }
+
+  if (issue.entityType === 'apparatus' && issue.entityId) {
+    const apparatus = project.apparatus.find((candidate) => candidate.id === issue.entityId);
+    return apparatus ? { objectId: apparatus.id, point: { x: apparatus.x, y: apparatus.y } } : null;
+  }
+
+  if (issue.entityType === 'electrical-panel') {
+    return project.electricalPanel
+      ? { objectId: project.electricalPanel.id, point: { x: project.electricalPanel.x, y: project.electricalPanel.y } }
+      : null;
+  }
+
+  if (issue.entityType === 'duct' && issue.entityId) {
+    const duct = project.ducts.find((candidate) => candidate.id === issue.entityId);
+    if (!duct) {
+      return null;
+    }
+
+    const pathPoints = getDuctPathPoints(
+      duct,
+      project.octopuses,
+      project.apparatus,
+      project.electricalPanel,
+      project.drawing.metersPerPixel,
+    );
+    if (pathPoints.length === 0) {
+      return null;
+    }
+
+    const midpoint = pathPoints[Math.floor(pathPoints.length / 2)];
+    return { objectId: duct.id, point: midpoint };
+  }
+
+  return null;
 }
 
 interface ElectricalPanelNodeProps {

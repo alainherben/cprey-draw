@@ -26,6 +26,7 @@ interface ToolbarProps {
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
   onOpenNomenclature: () => void;
+  onOpenValidation: () => void;
   onStartElectricalPanelPlacement: () => void;
   onStartOctopusPlacement: (modelId: OctopusModelId) => void;
   onStartApparatusPlacement: (catalogId: ApparatusCatalogId) => void;
@@ -62,6 +63,7 @@ export function Toolbar({
   onToggleLayerVisible,
   onSaveProject,
   onOpenNomenclature,
+  onOpenValidation,
   onStartElectricalPanelPlacement,
   onStartOctopusPlacement,
   onStartApparatusPlacement,
@@ -125,6 +127,7 @@ export function Toolbar({
         >
           <MenuItem label="Sauvegarder" onSelect={() => runAndClose(onSaveProject)} />
           <MenuItem label="Nomenclature" onSelect={() => runAndClose(onOpenNomenclature)} />
+          <MenuItem label="Contrôles" onSelect={() => runAndClose(onOpenValidation)} />
         </MenuButton>
 
         <MenuButton id="plan" label="Plan" openMenu={openMenu} onToggle={setOpenMenu}>
