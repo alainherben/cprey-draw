@@ -60,6 +60,16 @@ export interface PdfPlanScope {
   plan?: Plan;
   electricalPanel?: ElectricalPanel;
   octopuses: Octopus[];
+  octopusLogoAssets: Record<string, string>;
+  octopusRenderMode: 'official-logo-framed';
+  octopusLogoFrame: {
+    fill: '#ffffff';
+    borderWidthMm: number;
+    minSizeMm: number;
+    maxSizeMm: number;
+    logoRatio: number;
+    sizeScale: number;
+  };
   apparatus: ApparatusInstance[];
   ducts: Duct[];
 }

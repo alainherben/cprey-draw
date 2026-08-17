@@ -5,9 +5,9 @@ import { getApparatusAssetUrl } from '../../domain/apparatusAssets';
 import { buildQuadraticDuctGeometry, quadraticBezierPoint } from '../../domain/ductGeometry';
 import { getDuctPathPoints, getLinkColorCss } from '../../domain/ducts';
 import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
-import { getOctopusPixelSize, getOctopusPortLocalPosition, OCTOPUS_MODELS } from '../../domain/octopus';
-import { OCTOPUS_LOGO_URLS } from '../../domain/octopusAssets';
-import type { ApparatusInstance, CpreyDrawProject, Duct, Octopus, Point } from '../../types/project';
+import { getOctopusPixelSize, OCTOPUS_MODELS } from '../../domain/octopus';
+import { getOctopusLogoUrl } from '../../domain/octopusAssets';
+import type { ApparatusInstance, CpreyDrawProject, Point } from '../../types/project';
 import { getPdfPlanRect, formatPdfDate } from './PdfLayout';
 import type { PdfDocumentModel, PdfFitTransform, PdfPageModel, PdfPlanScope } from './PdfTypes';
 
@@ -33,7 +33,7 @@ export async function renderPdfPlanPage(
   await drawPlanBackground(doc, page.scope, page.transform);
   drawDucts(doc, model.project, page.scope, page.transform);
   drawElectricalPanel(doc, model.project, page.scope, page.transform);
-  await drawOctopuses(doc, model.project, page.scope, page.transform, page.type === 'octopus-plan');
+  await drawOctopuses(doc, model.project, page.scope, page.transform);
   await drawApparatus(doc, model.project, page.scope, page.transform);
   drawCartouche(doc, model, pageNumber, totalPages);
 }
@@ -116,7 +116,6 @@ async function drawOctopuses(
   project: CpreyDrawProject,
   scope: PdfPlanScope,
   transform: PdfFitTransform,
-  detailed: boolean,
 ): Promise<void> {
   if (project.drawing.metersPerPixel === null) {
     return;
@@ -129,42 +128,27 @@ async function drawOctopuses(
 
     const size = getOctopusPixelSize(project.drawing.metersPerPixel);
     const displayScale = octopus.displayScale ?? 1;
-    const width = size.width * displayScale * transform.scale;
-    const height = size.height * displayScale * transform.scale;
+    const physicalWidth = size.width * displayScale * transform.scale;
+    const physicalHeight = size.height * displayScale * transform.scale;
+    const naturalFrameSize = Math.min(physicalWidth, physicalHeight) * 1.8 * scope.octopusLogoFrame.sizeScale;
+    const frameSize = clamp(
+      naturalFrameSize,
+      scope.octopusLogoFrame.minSizeMm,
+      scope.octopusLogoFrame.maxSizeMm,
+    );
+    const logoSize = frameSize * scope.octopusLogoFrame.logoRatio;
     const center = worldToPdf(octopus, transform);
+    const logoUrl = getOctopusLogoUrl(octopus.modelId);
     const color = OCTOPUS_MODELS[octopus.modelId].color;
 
-    doc.setFillColor('#ffffff');
-    doc.setDrawColor(color);
-    doc.setLineWidth(0.45);
-    doc.roundedRect(center.x - width / 2, center.y - height / 2, width, height, 1.4, 1.4, 'FD');
-
-    const logoUrl = OCTOPUS_LOGO_URLS[octopus.modelId];
-    const logoSize = Math.min(width, height) * 0.62;
-    await drawRasterAsset(doc, logoUrl, center.x - logoSize / 2, center.y - logoSize / 2, logoSize, logoSize);
-
-    if (detailed) {
-      drawOctopusPorts(doc, octopus, center, width, height);
+    try {
+      const dataUrl = await imageUrlToPngDataUrl(logoUrl);
+      drawOctopusLogoFrame(doc, center, frameSize, color, scope.octopusLogoFrame.borderWidthMm);
+      doc.addImage(dataUrl, 'PNG', center.x - logoSize / 2, center.y - logoSize / 2, logoSize, logoSize, undefined, 'FAST');
+    } catch (error) {
+      console.error(`Logo de pieuvre manquant ou illisible: ${octopus.modelId}`, error);
+      drawOctopusLogoFrame(doc, center, frameSize, '#9ca3af', scope.octopusLogoFrame.borderWidthMm);
     }
-  }
-}
-
-function drawOctopusPorts(doc: jsPDF, octopus: Octopus, center: Point, width: number, height: number) {
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(5.5);
-  doc.setTextColor('#111827');
-  doc.setDrawColor('#111827');
-  doc.setFillColor('#ffffff');
-
-  for (const port of octopus.ports) {
-    const local = getOctopusPortLocalPosition(port, width, height);
-    const angle = (octopus.rotation * Math.PI) / 180;
-    const rotated = {
-      x: center.x + local.x * Math.cos(angle) - local.y * Math.sin(angle),
-      y: center.y + local.x * Math.sin(angle) + local.y * Math.cos(angle),
-    };
-    doc.circle(rotated.x, rotated.y, 1.2, 'FD');
-    doc.text(String(port.number), rotated.x, rotated.y - 1.8, { align: 'center' });
   }
 }
 
@@ -249,11 +233,13 @@ async function drawRasterAsset(
   width: number,
   height: number,
   rotation = 0,
+  label = url,
 ): Promise<void> {
   try {
     const dataUrl = await imageUrlToPngDataUrl(url);
     doc.addImage(dataUrl, 'PNG', x, y, width, height, undefined, 'FAST', rotation);
-  } catch {
+  } catch (error) {
+    console.error(`Asset PDF introuvable ou illisible: ${label}`, error);
     doc.setDrawColor('#111827');
     doc.setFillColor('#ffffff');
     doc.circle(x + width / 2, y + height / 2, Math.min(width, height) / 2, 'S');
@@ -280,7 +266,12 @@ function imageUrlToPngDataUrl(url: string): Promise<string> {
         return;
       }
       context.clearRect(0, 0, size, size);
-      context.drawImage(image, 0, 0, size, size);
+      const ratio = image.naturalWidth > 0 && image.naturalHeight > 0
+        ? image.naturalWidth / image.naturalHeight
+        : 1;
+      const drawWidth = ratio >= 1 ? size : size * ratio;
+      const drawHeight = ratio >= 1 ? size / ratio : size;
+      context.drawImage(image, (size - drawWidth) / 2, (size - drawHeight) / 2, drawWidth, drawHeight);
       resolve(canvas.toDataURL('image/png'));
     };
     image.onerror = () => reject(new Error(`Asset PDF introuvable: ${url}`));
@@ -291,11 +282,22 @@ function imageUrlToPngDataUrl(url: string): Promise<string> {
   return promise;
 }
 
+function drawOctopusLogoFrame(doc: jsPDF, center: Point, size: number, color: string, borderWidthMm: number) {
+  doc.setFillColor('#ffffff');
+  doc.setDrawColor(color || '#9ca3af');
+  doc.setLineWidth(borderWidthMm);
+  doc.roundedRect(center.x - size / 2, center.y - size / 2, size, size, 2, 2, 'FD');
+}
+
 function worldToPdf(point: Point, transform: PdfFitTransform): Point {
   return {
     x: transform.x + point.x * transform.scale,
     y: transform.y + point.y * transform.scale,
   };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function drawLightning(doc: jsPDF, center: Point, size: number) {

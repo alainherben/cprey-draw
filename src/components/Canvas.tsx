@@ -134,6 +134,7 @@ const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 8;
 const FIT_PADDING = 40;
 const LIGHTNING_PATH = 'M13 1 L4 14 H11 L9 23 L20 9 H13 Z';
+const OCTOPUS_GENERAL_LOGO_SIZE_SCALE = 0.66;
 
 type PendingConnection =
   | {
@@ -1893,14 +1894,21 @@ function OctopusNode({
   const width = physicalWidth * displayScale;
   const height = physicalHeight * displayScale;
   const displayLevel = getOctopusDisplayLevel(viewportScale);
-  const showPorts = displayLevel !== 'icon';
+  const iconOnly = displayLevel === 'icon';
+  const showPorts = !iconOnly;
   const showPortNumbers = displayLevel === 'detailed';
   const model = OCTOPUS_MODELS[octopus.modelId];
-  const logoBoxSize = Math.max(Math.min(width, height) * 0.62, 18 / viewportScale);
+  const iconFrameSize =
+    Math.max(Math.min(width, height) * 1.8, 34 / viewportScale) * OCTOPUS_GENERAL_LOGO_SIZE_SCALE;
+  const logoBoxSize = iconOnly
+    ? iconFrameSize * 0.66
+    : Math.max(Math.min(width, height) * 0.62, 18 / viewportScale);
   const logoRatio = logoImage ? logoImage.naturalWidth / logoImage.naturalHeight : 1;
   const logoWidth = logoRatio >= 1 ? logoBoxSize : logoBoxSize * logoRatio;
   const logoHeight = logoRatio >= 1 ? logoBoxSize / logoRatio : logoBoxSize;
   const portRadius = Math.max(3 / viewportScale, Math.min(width, height) * 0.035);
+  const selectionWidth = iconOnly ? iconFrameSize : width;
+  const selectionHeight = iconOnly ? iconFrameSize : height;
 
   return (
     <Group
@@ -1929,16 +1937,39 @@ function OctopusNode({
       }}
     >
       <Rect
-        x={-width / 2}
-        y={-height / 2}
-        width={width}
-        height={height}
-        cornerRadius={Math.min(width, height) * 0.06}
-        fill="#ffffff"
-        stroke={model.color}
-        strokeWidth={Math.max(1.5 / viewportScale, 0.5)}
+        x={-selectionWidth / 2}
+        y={-selectionHeight / 2}
+        width={selectionWidth}
+        height={selectionHeight}
+        fill="rgba(255,255,255,0)"
         listening
       />
+
+      {iconOnly ? (
+        <Rect
+          x={-iconFrameSize / 2}
+          y={-iconFrameSize / 2}
+          width={iconFrameSize}
+          height={iconFrameSize}
+          cornerRadius={Math.min(iconFrameSize * 0.14, 8 / viewportScale)}
+          fill="#ffffff"
+          stroke={model.color}
+          strokeWidth={2 / viewportScale}
+          listening={false}
+        />
+      ) : (
+        <Rect
+          x={-width / 2}
+          y={-height / 2}
+          width={width}
+          height={height}
+          cornerRadius={Math.min(width, height) * 0.06}
+          fill="#ffffff"
+          stroke={model.color}
+          strokeWidth={Math.max(1.5 / viewportScale, 0.5)}
+          listening={false}
+        />
+      )}
 
       {logoImage && (
         <KonvaImage
@@ -2000,11 +2031,11 @@ function OctopusNode({
 
       {selected && (
         <Rect
-          x={-width / 2 - 5 / viewportScale}
-          y={-height / 2 - 5 / viewportScale}
-          width={width + 10 / viewportScale}
-          height={height + 10 / viewportScale}
-          cornerRadius={Math.min(width, height) * 0.08}
+          x={-selectionWidth / 2 - 5 / viewportScale}
+          y={-selectionHeight / 2 - 5 / viewportScale}
+          width={selectionWidth + 10 / viewportScale}
+          height={selectionHeight + 10 / viewportScale}
+          cornerRadius={Math.min(selectionWidth, selectionHeight) * 0.08}
           stroke="#2563eb"
           strokeWidth={2 / viewportScale}
           dash={[8 / viewportScale, 5 / viewportScale]}

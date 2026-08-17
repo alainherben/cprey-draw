@@ -10,3 +10,7 @@ export const OCTOPUS_LOGO_URLS: Record<OctopusModelId, string> = {
   other: otherLogoUrl,
   comfort: comfortLogoUrl,
 };
+
+export function getOctopusLogoUrl(modelId: OctopusModelId): string {
+  return OCTOPUS_LOGO_URLS[modelId];
+}

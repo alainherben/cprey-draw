@@ -102,6 +102,34 @@ test('injects nomenclature and validation results into the document model', () =
   assert.ok(model.validation.issues.some((issue) => issue.code === 'APPARATUS_UNCONNECTED'));
 });
 
+test('references official octopus SVG assets and renders PDF octopuses as framed logos', () => {
+  const model = buildPdfDocumentModel(createPdfProject(), DEFAULT_PDF_EXPORT_OPTIONS);
+  const generalPlan = model.pages.find((page) => page.type === 'general-plan');
+  const octopusPlan = model.pages.find((page) => page.type === 'octopus-plan');
+
+  assert.equal(generalPlan?.type, 'general-plan');
+  assert.equal(octopusPlan?.type, 'octopus-plan');
+  if (generalPlan?.type !== 'general-plan' || octopusPlan?.type !== 'octopus-plan') {
+    throw new Error('Pages PDF attendues introuvables');
+  }
+
+  assert.equal(generalPlan.scope.octopusRenderMode, 'official-logo-framed');
+  assert.equal(octopusPlan.scope.octopusRenderMode, 'official-logo-framed');
+  assert.deepEqual(generalPlan.scope.octopusLogoFrame, {
+    fill: '#ffffff',
+    borderWidthMm: 0.5,
+    minSizeMm: 12,
+    maxSizeMm: 14,
+    logoRatio: 0.66,
+    sizeScale: 0.66,
+  });
+  assert.deepEqual(Object.values(generalPlan.scope.octopusLogoAssets).sort(), [
+    'logo-pieuvre-bain.svg',
+    'logo-pieuvre-cuisine.svg',
+  ]);
+  assert.deepEqual(Object.values(octopusPlan.scope.octopusLogoAssets), ['logo-pieuvre-cuisine.svg']);
+});
+
 test('generates a safe deterministic PDF filename', () => {
   assert.equal(
     buildPdfFilename('Maison / Rue de l’Église: Lot 2', new Date('2026-08-16T10:15:00.000Z')),

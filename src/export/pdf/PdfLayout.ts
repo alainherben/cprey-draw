@@ -1,12 +1,22 @@
 import { getDuctPathPoints } from '../../domain/ducts';
 import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
 import { getOctopusPixelSize } from '../../domain/octopus';
+import { getOctopusLogoFilename } from '../../domain/octopusAssetMap';
 import type { CpreyDrawProject, Duct, Point } from '../../types/project';
 import type { PdfExportOptions, PdfFitTransform, PdfPageRect, PdfPlanScope } from './PdfTypes';
 
 export const PDF_MARGIN_MM = 10;
 export const PDF_PLAN_TITLE_HEIGHT_MM = 12;
 export const PDF_CARTOUCHE_HEIGHT_MM = 14;
+export const OCTOPUS_LOGO_RENDER_SIZE_SCALE = 0.66;
+export const PDF_OCTOPUS_LOGO_FRAME = {
+  fill: '#ffffff',
+  borderWidthMm: 0.5,
+  minSizeMm: 12,
+  maxSizeMm: 14,
+  logoRatio: 0.66,
+  sizeScale: OCTOPUS_LOGO_RENDER_SIZE_SCALE,
+} as const;
 
 const PAGE_SIZES_MM = {
   a4: { width: 210, height: 297 },
@@ -73,6 +83,11 @@ export function createGeneralPlanScope(project: CpreyDrawProject): PdfPlanScope 
     plan: project.plans[0],
     electricalPanel: project.electricalPanel,
     octopuses: project.octopuses.filter((octopus) => octopus.visible),
+    octopusLogoAssets: Object.fromEntries(
+      project.octopuses.map((octopus) => [octopus.id, getOctopusLogoFilename(octopus.modelId)]),
+    ),
+    octopusRenderMode: 'official-logo-framed',
+    octopusLogoFrame: PDF_OCTOPUS_LOGO_FRAME,
     apparatus: project.apparatus.filter((apparatus) => apparatus.visible),
     ducts: project.ducts.filter((duct) => duct.visible),
   };
@@ -97,6 +112,9 @@ export function createOctopusPlanScope(project: CpreyDrawProject, octopusId: str
     plan: project.plans[0],
     electricalPanel: includeElectricalPanel ? project.electricalPanel : undefined,
     octopuses: octopus && octopus.visible ? [octopus] : [],
+    octopusLogoAssets: octopus ? { [octopus.id]: getOctopusLogoFilename(octopus.modelId) } : {},
+    octopusRenderMode: 'official-logo-framed',
+    octopusLogoFrame: PDF_OCTOPUS_LOGO_FRAME,
     apparatus: project.apparatus.filter((apparatus) => apparatus.visible && apparatusIds.has(apparatus.id)),
     ducts,
   };
