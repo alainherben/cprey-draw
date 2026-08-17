@@ -1,6 +1,6 @@
 import type { jsPDF } from 'jspdf';
 import { getApparatusCatalogItem } from '../../catalog/apparatus';
-import { estimateApparatusLabelSize, getApparatusLabelPlacement, getApparatusPixelSize } from '../../domain/apparatus';
+import { getApparatusLabelLayout, getApparatusPixelSize } from '../../domain/apparatus';
 import { getApparatusAssetUrl } from '../../domain/apparatusAssets';
 import { buildQuadraticDuctGeometry, quadraticBezierPoint } from '../../domain/ductGeometry';
 import { getDuctPathPoints, getLinkColorCss } from '../../domain/ducts';
@@ -31,7 +31,7 @@ export async function renderPdfPlanPage(
   doc.rect(planRect.x, planRect.y, planRect.width, planRect.height);
 
   await drawPlanBackground(doc, page.scope, page.transform);
-  drawDucts(doc, model.project, page.scope, page.transform);
+  drawDucts(doc, model.project, page.scope, page.transform, shouldShowDuctLengths(model, page));
   drawElectricalPanel(doc, model.project, page.scope, page.transform);
   await drawOctopuses(doc, model.project, page.scope, page.transform);
   await drawApparatus(doc, model.project, page.scope, page.transform);
@@ -59,7 +59,13 @@ async function drawPlanBackground(doc: jsPDF, scope: PdfPlanScope, transform: Pd
   );
 }
 
-function drawDucts(doc: jsPDF, project: CpreyDrawProject, scope: PdfPlanScope, transform: PdfFitTransform) {
+function drawDucts(
+  doc: jsPDF,
+  project: CpreyDrawProject,
+  scope: PdfPlanScope,
+  transform: PdfFitTransform,
+  showLengthLabels: boolean,
+) {
   for (const duct of scope.ducts) {
     const points = getDuctPathPoints(
       duct,
@@ -85,11 +91,13 @@ function drawDucts(doc: jsPDF, project: CpreyDrawProject, scope: PdfPlanScope, t
       }
     }
 
-    const labelPoint = worldToPdf(geometry.labelPoint, transform);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor('#111827');
-    doc.text(`${geometry.lengthMeters.toFixed(2).replace('.', ',')} m`, labelPoint.x + 1.2, labelPoint.y - 1.2);
+    if (showLengthLabels) {
+      const labelPoint = worldToPdf(geometry.labelPoint, transform);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor('#111827');
+      doc.text(`${geometry.lengthMeters.toFixed(2).replace('.', ',')} m`, labelPoint.x + 1.2, labelPoint.y - 1.2);
+    }
   }
 }
 
@@ -184,30 +192,48 @@ async function drawApparatus(
       doc.setDrawColor(apparatus.connected ? '#00ff00' : '#111827');
       doc.circle(center.x, center.y, Math.min(width, height) / 2, 'S');
     }
-    drawApparatusLabel(doc, apparatus, center, width, height);
+    drawApparatusLabel(doc, apparatus, center, width, height, transform);
   }
 }
 
-function drawApparatusLabel(doc: jsPDF, apparatus: ApparatusInstance, center: Point, iconWidth: number, iconHeight: number) {
+function drawApparatusLabel(
+  doc: jsPDF,
+  apparatus: ApparatusInstance,
+  center: Point,
+  iconWidth: number,
+  iconHeight: number,
+  transform: PdfFitTransform,
+) {
   const fontSizeMm = Math.max(2.6, apparatus.labelFontSize * 0.28);
-  const labelSize = estimateApparatusLabelSize(apparatus.identifier, fontSizeMm);
-  const placement = getApparatusLabelPlacement({
+  const placement = getApparatusLabelLayout({
+    apparatus: {
+      ...apparatus,
+      labelOffsetX: apparatus.labelOffsetX * transform.scale,
+      labelOffsetY: apparatus.labelOffsetY * transform.scale,
+    },
     center,
     iconWidth,
     iconHeight,
-    labelWidth: labelSize.width,
-    labelHeight: labelSize.height,
     gap: 1.8,
     visibleBounds: { x: -10000, y: -10000, width: 20000, height: 20000 },
-    overrideSide: apparatus.labelPosition,
+    fontSize: fontSizeMm,
   });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(fontSizeMm);
   doc.setTextColor('#111827');
-  doc.text(apparatus.identifier, placement.x, placement.y + labelSize.height * 0.74, {
+  doc.text(apparatus.identifier, placement.x, placement.y + placement.height * 0.74, {
     align: placement.align,
   });
+}
+
+function shouldShowDuctLengths(
+  model: PdfDocumentModel,
+  page: Extract<PdfPageModel, { type: 'general-plan' | 'octopus-plan' }>,
+): boolean {
+  return page.type === 'general-plan'
+    ? model.options.showDuctLengthsGeneralPlan
+    : model.options.showDuctLengthsOctopusPlans;
 }
 
 function drawCartouche(doc: jsPDF, model: PdfDocumentModel, pageNumber: number, totalPages: number) {

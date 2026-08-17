@@ -47,8 +47,7 @@ import {
 } from '../commands/connections/ConnectionCommands';
 import {
   createApparatusInstance,
-  estimateApparatusLabelSize,
-  getApparatusLabelPlacement,
+  getApparatusLabelLayout,
   getApparatusPixelSize,
   type ApparatusVisibleBounds,
 } from '../domain/apparatus';
@@ -1214,6 +1213,7 @@ export function DrawingCanvas() {
         hasTemporaryMeasurement={temporaryMeasurement !== null || measureDraft.start !== null}
         wheelZoomEnabled={project.drawing.zoomWheelEnabled}
         movementLocked={project.drawing.movementLocked}
+        showDuctLengths={project.drawing.showDuctLengths}
         hasScaleReference={project.drawing.scaleReference !== null}
         scaleMarkerVisible={project.drawing.scaleMarkerVisible}
         layers={getProjectLayers(project)}
@@ -1221,6 +1221,7 @@ export function DrawingCanvas() {
         onFitToScreen={() => fitPlanToScreen()}
         onToggleWheelZoom={() => updateDrawingState({ zoomWheelEnabled: !project.drawing.zoomWheelEnabled })}
         onToggleMovementLocked={() => updateDrawingState({ movementLocked: !project.drawing.movementLocked })}
+        onToggleShowDuctLengths={() => updateDrawingState({ showDuctLengths: !project.drawing.showDuctLengths })}
         onToggleScaleMarkerVisible={() => updateDrawingState({ scaleMarkerVisible: !project.drawing.scaleMarkerVisible })}
         onToggleLayerVisible={(layerId, visible) => {
           setProject((currentProject) => setLayerVisible(currentProject, layerId, visible));
@@ -1484,6 +1485,7 @@ export function DrawingCanvas() {
                 selectedWaypointId={selectedDuctWaypointId}
                 selectedControlId={selectedDuctControlId}
                 movementLocked={project.drawing.movementLocked}
+                showLength={project.drawing.showDuctLengths}
                 onHandlePointerDown={() => {
                   if (!project.drawing.movementLocked && !duct.locked) {
                     setIsDraggingDuctHandle(true);
@@ -2074,6 +2076,7 @@ interface DuctNodeProps {
   selectedWaypointId: string | null;
   selectedControlId: string | null;
   movementLocked: boolean;
+  showLength: boolean;
   onHandlePointerDown: () => void;
   onHandlePointerUp: () => void;
   onSelect: () => void;
@@ -2098,6 +2101,7 @@ function DuctNode({
   selectedWaypointId,
   selectedControlId,
   movementLocked,
+  showLength,
   onHandlePointerDown,
   onHandlePointerUp,
   onSelect,
@@ -2172,7 +2176,7 @@ function DuctNode({
           }}
         />
       )}
-      {usedLengthMeters !== null && (
+      {showLength && usedLengthMeters !== null && (
         <Text
           x={labelPoint.x + 8 / viewportScale}
           y={labelPoint.y - 18 / viewportScale}
@@ -2342,16 +2346,13 @@ function ApparatusNode({
   const showLabel = displayLevel !== 'icon';
   const labelFontSize = apparatus.labelFontSize;
   const labelGap = Math.max(width * 0.18, 6);
-  const labelSize = estimateApparatusLabelSize(apparatus.identifier, labelFontSize);
-  const labelPlacement = getApparatusLabelPlacement({
+  const labelPlacement = getApparatusLabelLayout({
+    apparatus,
     center: { x: apparatus.x, y: apparatus.y },
     iconWidth: width,
     iconHeight: height,
-    labelWidth: labelSize.width,
-    labelHeight: labelSize.height,
     visibleBounds,
     gap: labelGap,
-    overrideSide: apparatus.labelPosition,
   });
 
   return (

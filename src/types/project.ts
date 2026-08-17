@@ -248,6 +248,7 @@ export interface DrawingState {
   scaleMarkerVisible: boolean;
   zoomWheelEnabled: boolean;
   movementLocked: boolean;
+  showDuctLengths: boolean;
   apparatusGlobalScale: number;
 }
 

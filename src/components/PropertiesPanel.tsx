@@ -853,6 +853,7 @@ export function PropertiesPanel({
               scaleMarkerVisible: true,
               zoomWheelEnabled: true,
               movementLocked: false,
+              showDuctLengths: true,
               apparatusGlobalScale: 1,
             },
             plans: [],

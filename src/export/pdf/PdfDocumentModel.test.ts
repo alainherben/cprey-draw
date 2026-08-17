@@ -172,6 +172,15 @@ test('injects nomenclature and validation results into the document model', () =
   assert.ok(model.validation.issues.some((issue) => issue.code === 'APPARATUS_UNCONNECTED'));
 });
 
+test('uses independent PDF duct length display defaults for general and octopus plans', () => {
+  const model = buildPdfDocumentModel(createPdfProject(), DEFAULT_PDF_EXPORT_OPTIONS);
+
+  assert.equal(model.options.showDuctLengthsGeneralPlan, false);
+  assert.equal(model.options.showDuctLengthsOctopusPlans, true);
+  assert.ok(model.pages.some((page) => page.type === 'general-plan'));
+  assert.ok(model.pages.some((page) => page.type === 'octopus-plan'));
+});
+
 test('references official octopus SVG assets and renders PDF octopuses as framed logos', () => {
   const model = buildPdfDocumentModel(createPdfProject(), DEFAULT_PDF_EXPORT_OPTIONS);
   const generalPlan = model.pages.find((page) => page.type === 'general-plan');
@@ -269,6 +278,23 @@ test('visible layer filtering does not change nomenclature totals', () => {
 
   assert.deepEqual(visibleLayersModel.nomenclature.summary, completeModel.nomenclature.summary);
   assert.deepEqual(visibleLayersModel.nomenclature.ducts.byDiameter, completeModel.nomenclature.ducts.byDiameter);
+});
+
+test('PDF duct length rendering options do not change nomenclature totals', () => {
+  const project = createPdfProject();
+  const hiddenLengthsModel = buildPdfDocumentModel(project, {
+    ...DEFAULT_PDF_EXPORT_OPTIONS,
+    showDuctLengthsGeneralPlan: false,
+    showDuctLengthsOctopusPlans: false,
+  });
+  const visibleLengthsModel = buildPdfDocumentModel(project, {
+    ...DEFAULT_PDF_EXPORT_OPTIONS,
+    showDuctLengthsGeneralPlan: true,
+    showDuctLengthsOctopusPlans: true,
+  });
+
+  assert.deepEqual(hiddenLengthsModel.nomenclature.summary, visibleLengthsModel.nomenclature.summary);
+  assert.deepEqual(hiddenLengthsModel.nomenclature.ducts.byDiameter, visibleLengthsModel.nomenclature.ducts.byDiameter);
 });
 
 test('generates a safe deterministic PDF filename', () => {

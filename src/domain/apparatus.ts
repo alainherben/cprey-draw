@@ -21,6 +21,19 @@ export interface ApparatusLabelPlacement {
   align: 'left' | 'center';
 }
 
+export interface ApparatusLabelLayoutInput {
+  apparatus: Pick<
+    ApparatusInstance,
+    'identifier' | 'labelPosition' | 'labelFontSize' | 'labelOffsetX' | 'labelOffsetY' | 'labelLocked'
+  >;
+  center: Point;
+  iconWidth: number;
+  iconHeight: number;
+  visibleBounds: ApparatusVisibleBounds;
+  gap: number;
+  fontSize?: number;
+}
+
 let apparatusIdSequence = 0;
 
 function escapeRegExp(value: string): string {
@@ -130,6 +143,10 @@ export function getApparatusLabelPlacement({
   overrideSide?: ApparatusLabelSide;
 }): ApparatusLabelPlacement {
   const sidePreference: ApparatusLabelSide[] = ['right', 'left', 'top', 'bottom'];
+  if (overrideSide) {
+    return createLabelPlacement(overrideSide, center, iconWidth, iconHeight, labelWidth, labelHeight, gap);
+  }
+
   const preferredSides: ApparatusLabelSide[] = overrideSide
     ? [overrideSide]
     : sidePreference;
@@ -146,6 +163,34 @@ export function getApparatusLabelPlacement({
         : bestCandidate,
     )
   );
+}
+
+export function getApparatusLabelLayout({
+  apparatus,
+  center,
+  iconWidth,
+  iconHeight,
+  visibleBounds,
+  gap,
+  fontSize = apparatus.labelFontSize,
+}: ApparatusLabelLayoutInput): ApparatusLabelPlacement {
+  const labelSize = estimateApparatusLabelSize(apparatus.identifier, fontSize);
+  const placement = getApparatusLabelPlacement({
+    center,
+    iconWidth,
+    iconHeight,
+    labelWidth: labelSize.width,
+    labelHeight: labelSize.height,
+    visibleBounds,
+    gap,
+    overrideSide: apparatus.labelPosition,
+  });
+
+  return {
+    ...placement,
+    x: placement.x + apparatus.labelOffsetX,
+    y: placement.y + apparatus.labelOffsetY,
+  };
 }
 
 function createLabelPlacement(

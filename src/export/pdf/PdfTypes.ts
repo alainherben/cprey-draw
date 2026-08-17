@@ -23,6 +23,8 @@ export interface PdfExportOptions {
   paperFormat: PdfPaperFormat;
   orientation: PdfOrientation;
   visibleLayersOnly: boolean;
+  showDuctLengthsGeneralPlan: boolean;
+  showDuctLengthsOctopusPlans: boolean;
 }
 
 export interface PdfPageRect {
@@ -85,4 +87,6 @@ export const DEFAULT_PDF_EXPORT_OPTIONS: PdfExportOptions = {
   paperFormat: 'a3',
   orientation: 'landscape',
   visibleLayersOnly: false,
+  showDuctLengthsGeneralPlan: false,
+  showDuctLengthsOctopusPlans: true,
 };

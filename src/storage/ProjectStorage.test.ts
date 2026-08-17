@@ -79,6 +79,7 @@ test('saves and restores drawing display preferences without affecting calibrati
       scaleMarkerVisible: false,
       zoomWheelEnabled: false,
       movementLocked: true,
+      showDuctLengths: false,
     },
   };
 
@@ -90,6 +91,7 @@ test('saves and restores drawing display preferences without affecting calibrati
   assert.equal(restored.drawing.scaleMarkerVisible, false);
   assert.equal(restored.drawing.zoomWheelEnabled, false);
   assert.equal(restored.drawing.movementLocked, true);
+  assert.equal(restored.drawing.showDuctLengths, false);
 });
 
 test('normalizes legacy drawing display preferences with coherent defaults', () => {
@@ -130,6 +132,7 @@ test('normalizes legacy drawing display preferences with coherent defaults', () 
   assert.equal(restored.drawing.scaleMarkerVisible, true);
   assert.equal(restored.drawing.zoomWheelEnabled, true);
   assert.equal(restored.drawing.movementLocked, false);
+  assert.equal(restored.drawing.showDuctLengths, true);
 });
 
 test('saves and restores apparatus instances without duplicating catalog data', () => {

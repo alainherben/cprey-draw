@@ -15,6 +15,7 @@ interface ToolbarProps {
   hasTemporaryMeasurement: boolean;
   wheelZoomEnabled: boolean;
   movementLocked: boolean;
+  showDuctLengths: boolean;
   hasScaleReference: boolean;
   scaleMarkerVisible: boolean;
   layers: DrawingLayer[];
@@ -22,6 +23,7 @@ interface ToolbarProps {
   onFitToScreen: () => void;
   onToggleWheelZoom: () => void;
   onToggleMovementLocked: () => void;
+  onToggleShowDuctLengths: () => void;
   onToggleScaleMarkerVisible: () => void;
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
@@ -53,6 +55,7 @@ export function Toolbar({
   hasTemporaryMeasurement,
   wheelZoomEnabled,
   movementLocked,
+  showDuctLengths,
   hasScaleReference,
   scaleMarkerVisible,
   layers,
@@ -60,6 +63,7 @@ export function Toolbar({
   onFitToScreen,
   onToggleWheelZoom,
   onToggleMovementLocked,
+  onToggleShowDuctLengths,
   onToggleScaleMarkerVisible,
   onToggleLayerVisible,
   onSaveProject,
@@ -247,6 +251,10 @@ export function Toolbar({
           <MenuItem
             label={movementLocked ? 'Déplacements : OFF' : '✓ Déplacements : ON'}
             onSelect={() => runAndClose(onToggleMovementLocked)}
+          />
+          <MenuItem
+            label={showDuctLengths ? '✓ Afficher les longueurs de gaines' : 'Afficher les longueurs de gaines'}
+            onSelect={() => runAndClose(onToggleShowDuctLengths)}
           />
         </MenuButton>
 

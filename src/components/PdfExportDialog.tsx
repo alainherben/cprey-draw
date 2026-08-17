@@ -81,6 +81,20 @@ export function PdfExportDialog({
               onChange={(value) => setOptions({ ...options, visibleLayersOnly: value })}
             />
           </fieldset>
+
+          <fieldset>
+            <legend>Affichage des plans</legend>
+            <Checkbox
+              label="Longueurs sur le plan général"
+              checked={options.showDuctLengthsGeneralPlan}
+              onChange={(value) => setOptions({ ...options, showDuctLengthsGeneralPlan: value })}
+            />
+            <Checkbox
+              label="Longueurs sur les plans par pieuvre"
+              checked={options.showDuctLengthsOctopusPlans}
+              onChange={(value) => setOptions({ ...options, showDuctLengthsOctopusPlans: value })}
+            />
+          </fieldset>
         </div>
 
         {error && <p className="pdf-export-error">{error}</p>}
