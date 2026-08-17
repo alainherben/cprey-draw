@@ -34,6 +34,16 @@ export interface ApparatusLabelLayoutInput {
   fontSize?: number;
 }
 
+export interface ApparatusImageLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  rotation: number;
+}
+
 let apparatusIdSequence = 0;
 
 function escapeRegExp(value: string): string {
@@ -111,6 +121,28 @@ export function getApparatusPixelSize(
 ): { width: number; height: number } {
   const size = (APPARATUS_SYMBOL_BASE_METERS * displayScale * apparatusGlobalScale) / metersPerPixel;
   return { width: size, height: size };
+}
+
+export function getApparatusImageLayout({
+  center,
+  width,
+  height,
+  rotation,
+}: {
+  center: Point;
+  width: number;
+  height: number;
+  rotation: number;
+}): ApparatusImageLayout {
+  return {
+    x: center.x,
+    y: center.y,
+    width,
+    height,
+    offsetX: width / 2,
+    offsetY: height / 2,
+    rotation,
+  };
 }
 
 export function estimateApparatusLabelSize(

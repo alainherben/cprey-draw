@@ -1,6 +1,6 @@
 import type { jsPDF } from 'jspdf';
 import { getApparatusCatalogItem } from '../../catalog/apparatus';
-import { getApparatusLabelLayout, getApparatusPixelSize } from '../../domain/apparatus';
+import { getApparatusImageLayout, getApparatusLabelLayout, getApparatusPixelSize } from '../../domain/apparatus';
 import { getApparatusAssetUrl } from '../../domain/apparatusAssets';
 import { buildQuadraticDuctGeometry, quadraticBezierPoint } from '../../domain/ductGeometry';
 import { getDuctPathPoints, getLinkColorCss } from '../../domain/ducts';
@@ -12,6 +12,7 @@ import { getPdfPlanRect, formatPdfDate } from './PdfLayout';
 import type { PdfDocumentModel, PdfFitTransform, PdfPageModel, PdfPlanScope } from './PdfTypes';
 
 const imageCache = new Map<string, Promise<string>>();
+const rotatedImageCache = new Map<string, Promise<string>>();
 
 export async function renderPdfPlanPage(
   doc: jsPDF,
@@ -185,9 +186,15 @@ async function drawApparatus(
     const height = Math.max(size.height * transform.scale, (catalogItem.minDisplaySizePx ?? 22) * 0.18);
     const center = worldToPdf(apparatus, transform);
     const assetUrl = getApparatusAssetUrl(apparatus.catalogId, apparatus.connected);
+    const imageLayout = getApparatusImageLayout({
+      center,
+      width,
+      height,
+      rotation: apparatus.rotation,
+    });
 
     if (assetUrl) {
-      await drawRasterAsset(doc, assetUrl, center.x - width / 2, center.y - height / 2, width, height, apparatus.rotation);
+      await drawRasterAsset(doc, assetUrl, imageLayout, apparatus.catalogId);
     } else {
       doc.setDrawColor(apparatus.connected ? '#00ff00' : '#111827');
       doc.circle(center.x, center.y, Math.min(width, height) / 2, 'S');
@@ -254,22 +261,70 @@ function drawCartouche(doc: jsPDF, model: PdfDocumentModel, pageNumber: number, 
 async function drawRasterAsset(
   doc: jsPDF,
   url: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  rotation = 0,
+  layout: ReturnType<typeof getApparatusImageLayout>,
   label = url,
 ): Promise<void> {
   try {
-    const dataUrl = await imageUrlToPngDataUrl(url);
-    doc.addImage(dataUrl, 'PNG', x, y, width, height, undefined, 'FAST', rotation);
+    const dataUrl = await imageUrlToRotatedPngDataUrl(url, layout.rotation);
+    doc.addImage(
+      dataUrl,
+      'PNG',
+      layout.x - layout.offsetX,
+      layout.y - layout.offsetY,
+      layout.width,
+      layout.height,
+      undefined,
+      'FAST',
+    );
   } catch (error) {
     console.error(`Asset PDF introuvable ou illisible: ${label}`, error);
     doc.setDrawColor('#111827');
     doc.setFillColor('#ffffff');
-    doc.circle(x + width / 2, y + height / 2, Math.min(width, height) / 2, 'S');
+    doc.circle(layout.x, layout.y, Math.min(layout.width, layout.height) / 2, 'S');
   }
+}
+
+function imageUrlToRotatedPngDataUrl(url: string, rotation: number): Promise<string> {
+  const normalizedRotation = ((rotation % 360) + 360) % 360;
+  const cacheKey = `${url}#rotation=${normalizedRotation}`;
+  const cached = rotatedImageCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const promise = imageUrlToPngDataUrl(url).then((dataUrl) =>
+    rotatePngDataUrlAroundCenter(dataUrl, normalizedRotation),
+  );
+  rotatedImageCache.set(cacheKey, promise);
+  return promise;
+}
+
+function rotatePngDataUrlAroundCenter(dataUrl: string, rotation: number): Promise<string> {
+  if (rotation === 0) {
+    return Promise.resolve(dataUrl);
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const side = Math.max(image.naturalWidth, image.naturalHeight, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width = side;
+      canvas.height = side;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Canvas PDF indisponible'));
+        return;
+      }
+
+      context.translate(side / 2, side / 2);
+      context.rotate((rotation * Math.PI) / 180);
+      context.drawImage(image, -side / 2, -side / 2, side, side);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    image.onerror = () => reject(new Error('Image rasterisée illisible'));
+    image.src = dataUrl;
+  });
 }
 
 function imageUrlToPngDataUrl(url: string): Promise<string> {

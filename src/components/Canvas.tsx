@@ -47,6 +47,7 @@ import {
 } from '../commands/connections/ConnectionCommands';
 import {
   createApparatusInstance,
+  getApparatusImageLayout,
   getApparatusLabelLayout,
   getApparatusPixelSize,
   type ApparatusVisibleBounds,
@@ -2354,6 +2355,12 @@ function ApparatusNode({
     visibleBounds,
     gap: labelGap,
   });
+  const imageLayout = getApparatusImageLayout({
+    center: { x: 0, y: 0 },
+    width,
+    height,
+    rotation: apparatus.rotation,
+  });
 
   return (
     <Group
@@ -2381,29 +2388,30 @@ function ApparatusNode({
         onDragEnd({ x: event.target.x(), y: event.target.y() });
       }}
     >
-      <Group rotation={apparatus.rotation}>
-        {selected && (
-          <Rect
-            x={-width / 2 - 5 / viewportScale}
-            y={-height / 2 - 5 / viewportScale}
-            width={width + 10 / viewportScale}
-            height={height + 10 / viewportScale}
-            cornerRadius={4 / viewportScale}
-            stroke="#2563eb"
-            strokeWidth={1.5 / viewportScale}
-            dash={[5 / viewportScale, 4 / viewportScale]}
-            listening={false}
-          />
-        )}
-        <KonvaImage
-          image={iconImage}
-          x={-width / 2}
-          y={-height / 2}
-          width={width}
-          height={height}
-          listening
+      {selected && (
+        <Rect
+          x={-width / 2 - 5 / viewportScale}
+          y={-height / 2 - 5 / viewportScale}
+          width={width + 10 / viewportScale}
+          height={height + 10 / viewportScale}
+          cornerRadius={4 / viewportScale}
+          stroke="#2563eb"
+          strokeWidth={1.5 / viewportScale}
+          dash={[5 / viewportScale, 4 / viewportScale]}
+          listening={false}
         />
-      </Group>
+      )}
+      <KonvaImage
+        image={iconImage}
+        x={imageLayout.x}
+        y={imageLayout.y}
+        width={imageLayout.width}
+        height={imageLayout.height}
+        offsetX={imageLayout.offsetX}
+        offsetY={imageLayout.offsetY}
+        rotation={imageLayout.rotation}
+        listening
+      />
       {showLabel && (
         <Text
           x={labelPlacement.x - apparatus.x}

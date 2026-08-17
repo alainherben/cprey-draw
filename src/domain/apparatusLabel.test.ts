@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   estimateApparatusLabelSize,
+  getApparatusImageLayout,
   getApparatusLabelLayout,
   getApparatusLabelPlacement,
 } from './apparatus';
@@ -186,4 +187,50 @@ test('uses display scale only through rendered icon size to keep labels outside 
 
   assert.equal(large.x - small.x, 30);
   assert.equal(large.y, small.y);
+});
+
+test('keeps asymmetric apparatus image center stable for quarter-turn rotations', () => {
+  const center = { x: 240, y: 180 };
+  const rotations = [0, 90, 180, 270];
+
+  for (const rotation of rotations) {
+    for (const identifier of ['prise_double', 'prise_double_haute', 'applique']) {
+      const layout = getApparatusImageLayout({
+        center,
+        width: 48,
+        height: 48,
+        rotation,
+      });
+
+      assert.equal(layout.x, center.x, identifier);
+      assert.equal(layout.y, center.y, identifier);
+      assert.equal(layout.offsetX, 24, identifier);
+      assert.equal(layout.offsetY, 24, identifier);
+      assert.equal(layout.rotation, rotation, identifier);
+      assert.equal(layout.x - layout.offsetX + layout.width / 2, center.x, identifier);
+      assert.equal(layout.y - layout.offsetY + layout.height / 2, center.y, identifier);
+    }
+  }
+});
+
+test('keeps apparatus image center stable with display scale and asset variants', () => {
+  const center = { x: 320, y: 120 };
+
+  for (const connected of [false, true]) {
+    for (const identifier of ['prise_double', 'prise_double_haute', 'applique']) {
+      const scale = connected ? 2.5 : 1;
+      const size = 42 * scale;
+      const layout = getApparatusImageLayout({
+        center,
+        width: size,
+        height: size,
+        rotation: 270,
+      });
+
+      assert.equal(layout.x, center.x, identifier);
+      assert.equal(layout.y, center.y, identifier);
+      assert.equal(layout.offsetX, size / 2, identifier);
+      assert.equal(layout.offsetY, size / 2, identifier);
+    }
+  }
 });
