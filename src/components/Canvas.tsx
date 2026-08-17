@@ -134,7 +134,7 @@ const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 8;
 const FIT_PADDING = 40;
 const LIGHTNING_PATH = 'M13 1 L4 14 H11 L9 23 L20 9 H13 Z';
-const OCTOPUS_GENERAL_LOGO_SIZE_SCALE = 0.66;
+const OCTOPUS_GENERAL_LOGO_SIZE_SCALE = 0.33;
 
 type PendingConnection =
   | {

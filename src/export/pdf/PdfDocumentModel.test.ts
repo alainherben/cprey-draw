@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApparatusInstance } from '../../domain/apparatus';
-import { createDuct } from '../../domain/ducts';
+import { createDirectPanelDuct, createDuct } from '../../domain/ducts';
 import { createElectricalPanel } from '../../domain/electricalPanel';
+import {
+  DIRECT_DUCTS_LAYER_ID,
+  ELECTRICAL_PANEL_LAYER_ID,
+  getOctopusLayerId,
+  PLAN_LAYER_ID,
+  setLayerVisible,
+  UNASSIGNED_APPARATUS_LAYER_ID,
+} from '../../domain/layers';
 import { createOctopus } from '../../domain/octopus';
 import { createEmptyProject } from '../../storage/ProjectStorage';
 import type { CpreyDrawProject, Duct } from '../../types/project';
@@ -16,12 +24,32 @@ import {
 } from './PdfLayout';
 import { DEFAULT_PDF_EXPORT_OPTIONS } from './PdfTypes';
 
-function mustDuct(result: ReturnType<typeof createDuct>): Duct {
+function mustDuct(result: ReturnType<typeof createDuct> | ReturnType<typeof createDirectPanelDuct>): Duct {
   assert.equal(result.ok, true);
   if (!result.ok) {
     throw new Error('Création de gaine impossible');
   }
   return result.duct;
+}
+
+function visibleLayersOptions() {
+  return {
+    ...DEFAULT_PDF_EXPORT_OPTIONS,
+    visibleLayersOnly: true,
+  };
+}
+
+function getGeneralPlanScope(project: CpreyDrawProject, visibleLayersOnly: boolean) {
+  const model = buildPdfDocumentModel(project, {
+    ...DEFAULT_PDF_EXPORT_OPTIONS,
+    visibleLayersOnly,
+  });
+  const page = model.pages.find((candidate) => candidate.type === 'general-plan');
+  assert.equal(page?.type, 'general-plan');
+  if (page?.type !== 'general-plan') {
+    throw new Error('Plan général introuvable');
+  }
+  return { model, scope: page.scope };
 }
 
 function createPdfProject(): CpreyDrawProject {
@@ -66,6 +94,48 @@ function createPdfProject(): CpreyDrawProject {
       mustDuct(createDuct(project, kitchen.id, 12, { type: 'apparatus', id: kitchenLamp.id })),
       mustDuct(createDuct(project, bath.id, 12, { type: 'apparatus', id: bathLamp.id })),
     ],
+  };
+}
+
+function createLayeredPdfProject(): CpreyDrawProject {
+  const kitchen = createOctopus('kitchen', { x: 100, y: 100 }, []);
+  const bath = createOctopus('bath', { x: 400, y: 100 }, [kitchen]);
+  const kitchenLamp = createApparatusInstance('lampe', { x: 160, y: 100 }, []);
+  const bathLamp = createApparatusInstance('lampe', { x: 460, y: 100 }, [kitchenLamp]);
+  const looseOutlet = createApparatusInstance('prise-16a', { x: 600, y: 200 }, [kitchenLamp, bathLamp]);
+  const rj45 = createApparatusInstance('prise-rj45', { x: 220, y: 220 }, [kitchenLamp, bathLamp, looseOutlet]);
+  const electricalPanel = createElectricalPanel({ x: 80, y: 220 });
+  const project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    drawing: {
+      ...createEmptyProject().drawing,
+      metersPerPixel: 0.01,
+    },
+    electricalPanel,
+    plans: [
+      {
+        id: 'plan-layered',
+        name: 'plan.png',
+        source: 'data:image/png;base64,',
+        visible: true,
+        locked: false,
+        opacity: 1,
+        rotation: 0,
+        mimeType: 'image/png',
+        width: 900,
+        height: 600,
+      },
+    ],
+    octopuses: [kitchen, bath],
+    apparatus: [kitchenLamp, bathLamp, looseOutlet, rj45],
+  };
+  const kitchenDuct = mustDuct(createDuct(project, kitchen.id, 12, { type: 'apparatus', id: kitchenLamp.id }));
+  const bathDuct = mustDuct(createDuct(project, bath.id, 12, { type: 'apparatus', id: bathLamp.id }));
+  const directDuct = mustDuct(createDirectPanelDuct(project, electricalPanel.id, rj45.id));
+
+  return {
+    ...project,
+    ducts: [kitchenDuct, bathDuct, directDuct],
   };
 }
 
@@ -118,16 +188,87 @@ test('references official octopus SVG assets and renders PDF octopuses as framed
   assert.deepEqual(generalPlan.scope.octopusLogoFrame, {
     fill: '#ffffff',
     borderWidthMm: 0.5,
-    minSizeMm: 12,
-    maxSizeMm: 14,
+    minSizeMm: 6,
+    maxSizeMm: 7,
     logoRatio: 0.66,
-    sizeScale: 0.66,
+    sizeScale: 0.33,
   });
   assert.deepEqual(Object.values(generalPlan.scope.octopusLogoAssets).sort(), [
     'logo-pieuvre-bain.svg',
     'logo-pieuvre-cuisine.svg',
   ]);
   assert.deepEqual(Object.values(octopusPlan.scope.octopusLogoAssets), ['logo-pieuvre-cuisine.svg']);
+});
+
+test('visible layers export hides the plan background when the Plan layer is off', () => {
+  const project = setLayerVisible(createLayeredPdfProject(), PLAN_LAYER_ID, false);
+  const { scope } = getGeneralPlanScope(project, true);
+
+  assert.equal(scope.plan, undefined);
+  assert.ok(scope.octopuses.length > 0);
+  assert.ok(scope.apparatus.length > 0);
+});
+
+test('visible layers export hides the electrical panel when its layer is off', () => {
+  const project = setLayerVisible(createLayeredPdfProject(), ELECTRICAL_PANEL_LAYER_ID, false);
+  const { scope } = getGeneralPlanScope(project, true);
+
+  assert.equal(scope.electricalPanel, undefined);
+  assert.ok(scope.octopuses.length > 0);
+  assert.ok(scope.ducts.length > 0);
+});
+
+test('visible layers export hides an octopus layer with its ducts and attached apparatus', () => {
+  const project = createLayeredPdfProject();
+  const bath = project.octopuses.find((octopus) => octopus.modelId === 'bath');
+  assert.ok(bath);
+  const filteredProject = setLayerVisible(project, getOctopusLayerId(bath.id), false);
+  const { scope } = getGeneralPlanScope(filteredProject, true);
+
+  assert.equal(scope.octopuses.some((octopus) => octopus.id === bath.id), false);
+  assert.equal(scope.ducts.some((duct) => duct.circuitOrigin.type === 'octopus-output' && duct.circuitOrigin.octopusId === bath.id), false);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.name.startsWith('Lampe 02')), false);
+  assert.equal(scope.octopuses.some((octopus) => octopus.modelId === 'kitchen'), true);
+});
+
+test('visible layers export respects direct cables and unassigned apparatus layers', () => {
+  const project = setLayerVisible(
+    setLayerVisible(createLayeredPdfProject(), DIRECT_DUCTS_LAYER_ID, false),
+    UNASSIGNED_APPARATUS_LAYER_ID,
+    false,
+  );
+  const { scope } = getGeneralPlanScope(project, true);
+
+  assert.equal(scope.ducts.some((duct) => duct.circuitOrigin.type === 'electrical-panel'), false);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.catalogId === 'prise-rj45'), false);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.catalogId === 'prise-16a'), false);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.catalogId === 'lampe'), true);
+});
+
+test('complete PDF export ignores layer visibility for the general plan scope', () => {
+  const project = setLayerVisible(
+    setLayerVisible(createLayeredPdfProject(), DIRECT_DUCTS_LAYER_ID, false),
+    UNASSIGNED_APPARATUS_LAYER_ID,
+    false,
+  );
+  const { scope } = getGeneralPlanScope(project, false);
+
+  assert.equal(scope.ducts.some((duct) => duct.circuitOrigin.type === 'electrical-panel'), true);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.catalogId === 'prise-rj45'), true);
+  assert.equal(scope.apparatus.some((apparatus) => apparatus.catalogId === 'prise-16a'), true);
+});
+
+test('visible layer filtering does not change nomenclature totals', () => {
+  const project = setLayerVisible(
+    setLayerVisible(createLayeredPdfProject(), DIRECT_DUCTS_LAYER_ID, false),
+    UNASSIGNED_APPARATUS_LAYER_ID,
+    false,
+  );
+  const completeModel = buildPdfDocumentModel(project, DEFAULT_PDF_EXPORT_OPTIONS);
+  const visibleLayersModel = buildPdfDocumentModel(project, visibleLayersOptions());
+
+  assert.deepEqual(visibleLayersModel.nomenclature.summary, completeModel.nomenclature.summary);
+  assert.deepEqual(visibleLayersModel.nomenclature.ducts.byDiameter, completeModel.nomenclature.ducts.byDiameter);
 });
 
 test('generates a safe deterministic PDF filename', () => {

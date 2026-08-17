@@ -26,7 +26,7 @@ export function buildPdfDocumentModel(
   }
 
   if (options.includeGeneralPlan) {
-    const scope = createGeneralPlanScope(project);
+    const scope = createGeneralPlanScope(project, options.visibleLayersOnly);
     pages.push({
       type: 'general-plan',
       title: 'PLAN GÉNÉRAL',

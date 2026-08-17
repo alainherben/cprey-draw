@@ -2,18 +2,25 @@ import { getDuctPathPoints } from '../../domain/ducts';
 import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
 import { getOctopusPixelSize } from '../../domain/octopus';
 import { getOctopusLogoFilename } from '../../domain/octopusAssetMap';
+import {
+  isApparatusEffectivelyVisible,
+  isDuctEffectivelyVisible,
+  isElectricalPanelEffectivelyVisible,
+  isOctopusEffectivelyVisible,
+  isPlanEffectivelyVisible,
+} from '../../domain/visibility';
 import type { CpreyDrawProject, Duct, Point } from '../../types/project';
 import type { PdfExportOptions, PdfFitTransform, PdfPageRect, PdfPlanScope } from './PdfTypes';
 
 export const PDF_MARGIN_MM = 10;
 export const PDF_PLAN_TITLE_HEIGHT_MM = 12;
 export const PDF_CARTOUCHE_HEIGHT_MM = 14;
-export const OCTOPUS_LOGO_RENDER_SIZE_SCALE = 0.66;
+export const OCTOPUS_LOGO_RENDER_SIZE_SCALE = 0.33;
 export const PDF_OCTOPUS_LOGO_FRAME = {
   fill: '#ffffff',
   borderWidthMm: 0.5,
-  minSizeMm: 12,
-  maxSizeMm: 14,
+  minSizeMm: 6,
+  maxSizeMm: 7,
   logoRatio: 0.66,
   sizeScale: OCTOPUS_LOGO_RENDER_SIZE_SCALE,
 } as const;
@@ -78,18 +85,23 @@ export function fitDrawingToPdfPage(bounds: PdfPageRect, pageRect: PdfPageRect):
   };
 }
 
-export function createGeneralPlanScope(project: CpreyDrawProject): PdfPlanScope {
+export function createGeneralPlanScope(project: CpreyDrawProject, visibleLayersOnly = false): PdfPlanScope {
+  const plan = project.plans[0];
+  const electricalPanel = project.electricalPanel;
+
   return {
-    plan: project.plans[0],
-    electricalPanel: project.electricalPanel,
-    octopuses: project.octopuses.filter((octopus) => octopus.visible),
+    plan: plan && isPlanVisibleForPdf(project, plan, visibleLayersOnly) ? plan : undefined,
+    electricalPanel: electricalPanel && isElectricalPanelVisibleForPdf(project, electricalPanel, visibleLayersOnly)
+      ? electricalPanel
+      : undefined,
+    octopuses: project.octopuses.filter((octopus) => isOctopusVisibleForPdf(project, octopus, visibleLayersOnly)),
     octopusLogoAssets: Object.fromEntries(
       project.octopuses.map((octopus) => [octopus.id, getOctopusLogoFilename(octopus.modelId)]),
     ),
     octopusRenderMode: 'official-logo-framed',
     octopusLogoFrame: PDF_OCTOPUS_LOGO_FRAME,
-    apparatus: project.apparatus.filter((apparatus) => apparatus.visible),
-    ducts: project.ducts.filter((duct) => duct.visible),
+    apparatus: project.apparatus.filter((apparatus) => isApparatusVisibleForPdf(project, apparatus, visibleLayersOnly)),
+    ducts: project.ducts.filter((duct) => isDuctVisibleForPdf(project, duct, visibleLayersOnly)),
   };
 }
 
@@ -180,6 +192,48 @@ function collectApparatusEndpoint(endpoint: Duct['source'] | Duct['target'], app
   if (endpoint.type === 'apparatus') {
     apparatusIds.add(endpoint.id);
   }
+}
+
+function isPlanVisibleForPdf(
+  project: CpreyDrawProject,
+  plan: NonNullable<CpreyDrawProject['plans'][number]>,
+  visibleLayersOnly: boolean,
+): boolean {
+  return visibleLayersOnly ? isPlanEffectivelyVisible(project, plan) : plan.visible;
+}
+
+function isElectricalPanelVisibleForPdf(
+  project: CpreyDrawProject,
+  electricalPanel: NonNullable<CpreyDrawProject['electricalPanel']>,
+  visibleLayersOnly: boolean,
+): boolean {
+  return visibleLayersOnly
+    ? isElectricalPanelEffectivelyVisible(project, electricalPanel)
+    : electricalPanel.visible;
+}
+
+function isOctopusVisibleForPdf(
+  project: CpreyDrawProject,
+  octopus: CpreyDrawProject['octopuses'][number],
+  visibleLayersOnly: boolean,
+): boolean {
+  return visibleLayersOnly ? isOctopusEffectivelyVisible(project, octopus) : octopus.visible;
+}
+
+function isApparatusVisibleForPdf(
+  project: CpreyDrawProject,
+  apparatus: CpreyDrawProject['apparatus'][number],
+  visibleLayersOnly: boolean,
+): boolean {
+  return visibleLayersOnly ? isApparatusEffectivelyVisible(project, apparatus) : apparatus.visible;
+}
+
+function isDuctVisibleForPdf(
+  project: CpreyDrawProject,
+  duct: CpreyDrawProject['ducts'][number],
+  visibleLayersOnly: boolean,
+): boolean {
+  return visibleLayersOnly ? isDuctEffectivelyVisible(project, duct) : duct.visible;
 }
 
 function addObjectBounds(points: Point[], x: number, y: number, width: number, height: number) {
