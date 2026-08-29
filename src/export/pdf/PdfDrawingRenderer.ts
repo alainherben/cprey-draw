@@ -8,7 +8,7 @@ import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
 import { getOctopusPixelSize, OCTOPUS_MODELS } from '../../domain/octopus';
 import { getOctopusLogoUrl } from '../../domain/octopusAssets';
 import type { ApparatusInstance, CpreyDrawProject, Point } from '../../types/project';
-import { getPdfPlanRect, formatPdfDate } from './PdfLayout';
+import { getPdfCartoucheItems, getPdfPlanRect } from './PdfLayout';
 import type { PdfDocumentModel, PdfFitTransform, PdfPageModel, PdfPlanScope } from './PdfTypes';
 
 const imageCache = new Map<string, Promise<string>>();
@@ -246,16 +246,27 @@ function shouldShowDuctLengths(
 function drawCartouche(doc: jsPDF, model: PdfDocumentModel, pageNumber: number, totalPages: number) {
   const pageSize = doc.internal.pageSize;
   const y = pageSize.getHeight() - 16;
+  const cartouche = getPdfCartoucheItems(model.project, model.generatedAt, pageNumber, totalPages);
+  const firstLine = [
+    `Projet : ${cartouche[0][1]}`,
+    `Réf. : ${cartouche[1][1]}`,
+    `Version : ${cartouche[2][1]}`,
+    `Statut : ${cartouche[3][1]}`,
+  ].join('   ');
+  const secondLine = [
+    `Date : ${cartouche[4][1]}`,
+    model.project.drawing.metersPerPixel === null ? 'Échelle non définie' : 'Plan calibré',
+  ].join('   ');
+
   doc.setDrawColor('#d1d5db');
   doc.line(10, y - 3, pageSize.getWidth() - 10, y - 3);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor('#374151');
   doc.text('CPREY DRAW', 10, y + 2);
-  doc.text(`Projet : ${model.project.project.name}`, 52, y + 2);
-  doc.text(`Date : ${formatPdfDate(model.generatedAt)}`, 10, y + 7);
-  doc.text(model.project.drawing.metersPerPixel === null ? 'Échelle non définie' : 'Plan calibré', 52, y + 7);
-  doc.text(`Page ${pageNumber} / ${totalPages}`, pageSize.getWidth() - 10, y + 2, { align: 'right' });
+  doc.text(firstLine, 42, y + 2, { maxWidth: pageSize.getWidth() - 92 });
+  doc.text(secondLine, 42, y + 7, { maxWidth: pageSize.getWidth() - 92 });
+  doc.text(`Page ${cartouche[5][1]}`, pageSize.getWidth() - 10, y + 2, { align: 'right' });
 }
 
 async function drawRasterAsset(

@@ -2,6 +2,7 @@ import { getDuctPathPoints } from '../../domain/ducts';
 import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
 import { getOctopusPixelSize } from '../../domain/octopus';
 import { getOctopusLogoFilename } from '../../domain/octopusAssetMap';
+import { getProjectDisplayName, getProjectReferenceLabel, getProjectStatusLabel } from '../../domain/site';
 import {
   isApparatusEffectivelyVisible,
   isDuctEffectivelyVisible,
@@ -55,17 +56,74 @@ export function formatPdfDate(date: Date): string {
   return date.toLocaleDateString('fr-FR');
 }
 
-export function buildPdfFilename(projectName: string | undefined, date: Date): string {
-  const rawName = projectName?.trim() || 'Projet';
-  const cleanedName = rawName
+export function buildPdfFilename(project: CpreyDrawProject, date: Date): string {
+  const cleanedName = cleanFilenamePart(project.site.name ?? project.project.name) || 'Projet';
+  const cleanedReference = cleanFilenamePart(project.site.reference);
+  const isoDate = date.toISOString().slice(0, 10);
+  return `CPREY_DRAW_${[cleanedName, cleanedReference, isoDate].filter(Boolean).join('_')}.pdf`;
+}
+
+export function getPdfCoverRows(project: CpreyDrawProject): [string, string][] {
+  const rows: [string, string][] = [];
+  addRow(rows, 'Nom chantier', project.site.name);
+  addRow(rows, 'Client', project.site.clientName);
+  addRow(rows, 'Adresse', formatAddress(project));
+  addRow(rows, 'Référence chantier', project.site.reference);
+  addRow(rows, 'Référence devis', project.site.quoteReference);
+  addRow(rows, 'Électricien', project.site.electrician);
+  addRow(rows, 'Magasin / Distributeur', project.site.distributor);
+  addRow(rows, 'Statut', getProjectStatusLabel(project.status));
+  addRow(rows, 'Version', project.site.projectVersion);
+
+  if (project.origin.type === 'configurator') {
+    addRow(rows, 'Origine', 'Configurateur CPREY');
+    addRow(rows, 'Référence configurateur', project.origin.quoteId ?? project.site.quoteReference);
+    addRow(rows, 'Niveau configurateur', project.origin.configuratorSummary?.level);
+  }
+
+  return rows;
+}
+
+export function getPdfCartoucheItems(
+  project: CpreyDrawProject,
+  generatedAt: Date,
+  pageNumber: number,
+  totalPages: number,
+): [string, string][] {
+  return [
+    ['Projet', getProjectDisplayName(project)],
+    ['Référence', getProjectReferenceLabel(project) ?? 'Non renseignée'],
+    ['Version', project.site.projectVersion ?? 'Non renseignée'],
+    ['Statut', getProjectStatusLabel(project.status)],
+    ['Date', formatPdfDate(generatedAt)],
+    ['Page', `${pageNumber} / ${totalPages}`],
+  ];
+}
+
+function cleanFilenamePart(value: string | undefined): string {
+  const rawName = value?.trim() ?? '';
+  return rawName
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/['’]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 70) || 'Projet';
-  const isoDate = date.toISOString().slice(0, 10);
-  return `CPREY-DRAW_${cleanedName}_${isoDate}.pdf`;
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 70);
+}
+
+function formatAddress(project: CpreyDrawProject): string | undefined {
+  const addressParts = [
+    project.site.address,
+    [project.site.postalCode, project.site.city].filter(Boolean).join(' '),
+  ].filter(Boolean);
+
+  return addressParts.length > 0 ? addressParts.join(', ') : undefined;
+}
+
+function addRow(rows: [string, string][], label: string, value: string | undefined) {
+  if (value && value.trim().length > 0) {
+    rows.push([label, value]);
+  }
 }
 
 export function fitDrawingToPdfPage(bounds: PdfPageRect, pageRect: PdfPageRect): PdfFitTransform {

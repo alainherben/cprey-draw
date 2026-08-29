@@ -19,6 +19,12 @@ import {
 } from '../domain/ducts';
 import { OCTOPUS_MODELS } from '../domain/octopus';
 import {
+  getOctopusPortAssignments,
+  getStudyDevicePortAssignment,
+  getStudyDevicesForDrawingObject,
+  getStudyOctopus,
+} from '../domain/importedStudy';
+import {
   CONFIGURABLE_OUTPUT_TYPES,
   createOctopusOutputOverride,
   DEFAULT_DESTINATION_BY_TYPE,
@@ -36,8 +42,11 @@ import type {
   DuctEndpoint,
   DuctSpecification,
   ElectricalPanel,
+  ImportedStudy,
   Octopus,
   OctopusOutputOverride,
+  StudyDevice,
+  StudyRoom,
 } from '../types/project';
 
 type SelectedBusinessObject = ElectricalPanel | Octopus | ApparatusInstance;
@@ -82,6 +91,7 @@ interface PropertiesPanelProps {
   apparatus: ApparatusInstance[];
   electricalPanel: ElectricalPanel | undefined;
   ducts: Duct[];
+  study?: ImportedStudy;
   metersPerPixel: number | null;
   pendingConnectionOutput:
     | { kind: 'octopus-output'; octopusId: string; outputNumber: number; targetType: ConnectionTargetType }
@@ -94,6 +104,19 @@ interface PropertiesPanelProps {
   onUpdateOctopusOutputOverride: (octopusId: string, override: OctopusOutputOverride) => void;
   onResetOctopusOutputOverride: (octopusId: string, outputNumber: number) => void;
   onDeleteOctopus: (octopusId: string) => void;
+  onSetStudyOctopusInstallation: (
+    octopusId: string,
+    installationLevelId: string | undefined,
+    installationRoomId: string | undefined,
+  ) => void;
+  onSetStudyOctopusServedRooms: (octopusId: string, servedRoomIds: string[]) => void;
+  onAssignStudyDeviceToOctopusPort: (octopusId: string, portNumber: number, studyDeviceId: string) => void;
+  onUnassignOctopusPort: (octopusId: string, portNumber: number) => void;
+  onMoveStudyDeviceOctopusPortAssignment: (
+    studyDeviceId: string,
+    toOctopusId: string,
+    toPortNumber: number,
+  ) => void;
   onUpdateApparatus: (apparatusId: string, updates: ApparatusUpdates, label?: string) => void;
   onDeleteApparatus: (apparatusId: string) => void;
   onStartConnection: (octopusId: string, outputNumber: number, targetType: ConnectionTargetType) => void;
@@ -128,6 +151,42 @@ function outputSideLabel(outputNumber: number): string {
     return 'Bas';
   }
   return 'Gauche';
+}
+
+function formatStudyRoomLabel(study: ImportedStudy, room: StudyRoom): string {
+  const level = study.levels.find((candidate) => candidate.id === room.levelId);
+  const levelLabel = level ? (level.code ? `${level.code} : ${level.name}` : level.name) : 'Niveau inconnu';
+  return `${levelLabel} / ${room.name}`;
+}
+
+function formatStudyDevicePortLabel(study: ImportedStudy, device: StudyDevice): string {
+  const room = study.levels.flatMap((level) => level.rooms).find((candidate) => candidate.id === device.roomId);
+  const assignment = getStudyDevicePortAssignment(study, device.id);
+  const suffix = assignment ? ` · port ${assignment.portNumber}` : '';
+  return `${device.identifier ?? device.id}${room ? ` — ${room.name}` : ''}${suffix}`;
+}
+
+function getSelectableStudyDevicesForPort(
+  devices: StudyDevice[],
+  assignedDevice: StudyDevice | undefined,
+): StudyDevice[] {
+  const deviceIds = new Set<string>();
+  const selectable: StudyDevice[] = [];
+
+  for (const device of [assignedDevice, ...devices]) {
+    if (!device || deviceIds.has(device.id)) {
+      continue;
+    }
+    deviceIds.add(device.id);
+    selectable.push(device);
+  }
+
+  return selectable.sort((left, right) =>
+    (left.identifier ?? left.id).localeCompare(right.identifier ?? right.id, 'fr', {
+      numeric: true,
+      sensitivity: 'base',
+    }),
+  );
 }
 
 function formatLengthMeters(value: number): string {
@@ -270,6 +329,7 @@ export function PropertiesPanel({
   apparatus,
   electricalPanel,
   ducts,
+  study,
   metersPerPixel,
   pendingConnectionOutput,
   onClose,
@@ -279,6 +339,11 @@ export function PropertiesPanel({
   onUpdateOctopusOutputOverride,
   onResetOctopusOutputOverride,
   onDeleteOctopus,
+  onSetStudyOctopusInstallation,
+  onSetStudyOctopusServedRooms,
+  onAssignStudyDeviceToOctopusPort,
+  onUnassignOctopusPort,
+  onMoveStudyDeviceOctopusPortAssignment,
   onUpdateApparatus,
   onDeleteApparatus,
   onStartConnection,
@@ -304,6 +369,7 @@ export function PropertiesPanel({
   const [ductContentDescriptionDraft, setDuctContentDescriptionDraft] = useState('');
   const [ductConductorDrafts, setDuctConductorDrafts] = useState<DuctConductor[]>([]);
   const [ductSpecificationError, setDuctSpecificationError] = useState('');
+  const [studyOctopusError, setStudyOctopusError] = useState('');
 
   useEffect(() => {
     setDraftName(selectedObject?.name ?? '');
@@ -335,6 +401,7 @@ export function PropertiesPanel({
     setSelectedOutputNumber(1);
     setOverrideDraft(null);
     setOverrideError('');
+    setStudyOctopusError('');
   }, [selectedObject?.id]);
 
   useEffect(() => {
@@ -846,6 +913,12 @@ export function PropertiesPanel({
           {
             schemaVersion: 1,
             project: { id: '', name: '', updatedAt: '' },
+            site: {},
+            origin: { type: 'manual' },
+            status: 'draft',
+            ownership: {},
+            access: {},
+            audit: { createdAt: '', updatedAt: '' },
             drawing: {
               viewport: { x: 0, y: 0, scale: 1 },
               metersPerPixel,
@@ -870,6 +943,48 @@ export function PropertiesPanel({
     selectedObject.type === 'apparatus'
       ? ducts.some((duct) => duct.source.type === 'apparatus' && duct.source.id === selectedObject.id)
       : false;
+  const sourceStudyDevices = selectedObject.type === 'apparatus'
+    ? getStudyDevicesForDrawingObject(study, selectedObject.id)
+    : [];
+  const sourceStudyLevel = sourceStudyDevices[0]?.levelId
+    ? study?.levels.find((level) => level.id === sourceStudyDevices[0].levelId)
+    : undefined;
+  const sourceStudyRoom = sourceStudyLevel && sourceStudyDevices[0]?.roomId
+    ? sourceStudyLevel.rooms.find((room) => room.id === sourceStudyDevices[0].roomId)
+    : undefined;
+  const allStudyRooms = study?.levels.flatMap((level) => level.rooms) ?? [];
+  const selectedStudyOctopus = selectedObject.type === 'octopus'
+    ? getStudyOctopus(study, selectedObject.id)
+    : undefined;
+  const selectedOctopusAssignments = selectedObject.type === 'octopus'
+    ? getOctopusPortAssignments(study, selectedObject.id)
+    : [];
+  const sourceStudyDeviceAssignments = sourceStudyDevices
+    .map((device) => ({
+      device,
+      assignment: getStudyDevicePortAssignment(study, device.id),
+    }))
+    .filter((entry) => entry.assignment);
+  const selectedInstallationRooms = selectedStudyOctopus?.installationLevelId
+    ? allStudyRooms.filter((room) => room.levelId === selectedStudyOctopus.installationLevelId)
+    : allStudyRooms;
+  const servedRoomIds = selectedStudyOctopus?.servedRoomIds ?? [];
+  const assignableStudyDevices = study?.devices.filter((device) =>
+    device.type === 'apparatus' &&
+    device.roomId &&
+    servedRoomIds.includes(device.roomId)
+  ) ?? [];
+  const roomById = new Map(allStudyRooms.map((room) => [room.id, room]));
+  const assignmentByPort = new Map(selectedOctopusAssignments.map((assignment) => [assignment.portNumber, assignment]));
+
+  const runStudyOctopusAction = (action: () => void) => {
+    try {
+      action();
+      setStudyOctopusError('');
+    } catch (error) {
+      setStudyOctopusError(error instanceof Error ? error.message : 'Action étude impossible.');
+    }
+  };
 
   return (
     <aside
@@ -916,6 +1031,134 @@ export function PropertiesPanel({
             </strong>
           </div>
         </div>
+      )}
+
+      {selectedObject.type === 'octopus' && study && (
+        <section className="property-section study-octopus-section">
+          <h3>Étude pieuvre</h3>
+          {studyOctopusError && <p className="property-error">{studyOctopusError}</p>}
+
+          <label className="property-field">
+            <span>Niveau d'installation</span>
+            <select
+              value={selectedStudyOctopus?.installationLevelId ?? ''}
+              onChange={(event) => {
+                const levelId = event.currentTarget.value || undefined;
+                runStudyOctopusAction(() =>
+                  onSetStudyOctopusInstallation(selectedObject.id, levelId, undefined),
+                );
+              }}
+            >
+              <option value="">Non défini</option>
+              {study.levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.code ? `${level.code} : ${level.name}` : level.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="property-field">
+            <span>Pièce d'installation</span>
+            <select
+              value={selectedStudyOctopus?.installationRoomId ?? ''}
+              onChange={(event) => {
+                const roomId = event.currentTarget.value || undefined;
+                const room = roomId ? roomById.get(roomId) : undefined;
+                runStudyOctopusAction(() =>
+                  onSetStudyOctopusInstallation(
+                    selectedObject.id,
+                    room?.levelId ?? selectedStudyOctopus?.installationLevelId,
+                    roomId,
+                  ),
+                );
+              }}
+            >
+              <option value="">Non définie</option>
+              {selectedInstallationRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {formatStudyRoomLabel(study, room)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <h4>Pièces desservies</h4>
+          <div className="study-served-rooms">
+            {allStudyRooms.map((room) => {
+              const checked = servedRoomIds.includes(room.id);
+              return (
+                <label key={room.id} className="checkbox-field compact">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => {
+                      const nextRoomIds = checked
+                        ? servedRoomIds.filter((roomId) => roomId !== room.id)
+                        : [...servedRoomIds, room.id];
+                      runStudyOctopusAction(() =>
+                        onSetStudyOctopusServedRooms(selectedObject.id, nextRoomIds),
+                      );
+                    }}
+                  />
+                  <span>{formatStudyRoomLabel(study, room)}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <h4>Ports étude</h4>
+          <div className="study-port-list">
+            {[...selectedObject.ports]
+              .sort((left, right) => left.number - right.number)
+              .map((port) => {
+                const assignment = assignmentByPort.get(port.number);
+                const assignedDevice = assignment
+                  ? study.devices.find((device) => device.id === assignment.studyDeviceId)
+                  : undefined;
+                const selectableDevices = getSelectableStudyDevicesForPort(assignableStudyDevices, assignedDevice);
+
+                return (
+                  <label key={port.number} className="study-port-row">
+                    <strong>{port.number}</strong>
+                    <select
+                      value={assignment?.studyDeviceId ?? ''}
+                      onChange={(event) => {
+                        const nextStudyDeviceId = event.currentTarget.value;
+                        runStudyOctopusAction(() => {
+                          if (!nextStudyDeviceId) {
+                            onUnassignOctopusPort(selectedObject.id, port.number);
+                            return;
+                          }
+                          const currentAssignment = getStudyDevicePortAssignment(study, nextStudyDeviceId);
+                          if (
+                            currentAssignment &&
+                            (currentAssignment.octopusId !== selectedObject.id ||
+                              currentAssignment.portNumber !== port.number)
+                          ) {
+                            onMoveStudyDeviceOctopusPortAssignment(
+                              nextStudyDeviceId,
+                              selectedObject.id,
+                              port.number,
+                            );
+                            return;
+                          }
+                          onAssignStudyDeviceToOctopusPort(selectedObject.id, port.number, nextStudyDeviceId);
+                        });
+                      }}
+                    >
+                      <option value="">Libre</option>
+                      {selectableDevices.map((device) => (
+                        <option key={device.id} value={device.id}>
+                          {formatStudyDevicePortLabel(study, device)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+          </div>
+        </section>
       )}
 
       {selectedObject.type === 'apparatus' && apparatusCatalogItem && (
@@ -967,6 +1210,41 @@ export function PropertiesPanel({
             <strong>{apparatusCatalogItem.directSupply ? 'Oui' : 'Non'}</strong>
           </div>
         </div>
+      )}
+
+      {selectedObject.type === 'apparatus' && sourceStudyDevices.length > 0 && (
+        <section className="property-section">
+          <h3>Origine configurateur</h3>
+          <div className="readonly-properties single">
+            {sourceStudyLevel && (
+              <div>
+                <span>Niveau</span>
+                <strong>{sourceStudyLevel.code ? `${sourceStudyLevel.code} : ${sourceStudyLevel.name}` : sourceStudyLevel.name}</strong>
+              </div>
+            )}
+            {sourceStudyRoom && (
+              <div>
+                <span>Pièce</span>
+                <strong>{sourceStudyRoom.name}</strong>
+              </div>
+            )}
+            <div>
+              <span>Références</span>
+              <strong>{sourceStudyDevices.map((device) => device.identifier ?? device.id).join(', ')}</strong>
+            </div>
+            {sourceStudyDeviceAssignments.length > 0 && (
+              <div>
+                <span>Raccordement étude</span>
+                <strong>
+                  {sourceStudyDeviceAssignments.map(({ device, assignment }) => {
+                    const octopus = octopuses.find((candidate) => candidate.id === assignment?.octopusId);
+                    return `${sourceStudyDevices.length > 1 ? `${device.identifier ?? device.id} → ` : ''}${octopus?.name ?? 'Pieuvre introuvable'} / Port ${assignment?.portNumber}`;
+                  }).join(', ')}
+                </strong>
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {selectedObject.type === 'apparatus' && (

@@ -17,6 +17,20 @@ import { createBaseLayers, getProjectLayers } from '../domain/layers';
 import { normalizeDuctControlsForPoints } from '../domain/ductGeometry';
 import { getDuctPathPoints } from '../domain/ducts';
 import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
+import { normalizeImportedStudy, syncStudyWithDrawing } from '../domain/importedStudy';
+import {
+  createDefaultProjectAccess,
+  createDefaultProjectOrigin,
+  createDefaultProjectOwnership,
+  createDefaultSiteInformation,
+  createProjectAudit,
+  normalizeProjectAccess,
+  normalizeProjectAudit,
+  normalizeProjectOrigin,
+  normalizeProjectOwnership,
+  normalizeProjectStatus,
+  normalizeSiteInformation,
+} from '../domain/site';
 
 const STORAGE_KEY = 'cprey-draw.current-project.v1';
 
@@ -24,7 +38,7 @@ function createProjectId(): string {
   return `project-${Date.now()}`;
 }
 
-export function createEmptyProject(): CpreyDrawProject {
+export function createDefaultProject(): CpreyDrawProject {
   const now = new Date().toISOString();
 
   return {
@@ -34,6 +48,12 @@ export function createEmptyProject(): CpreyDrawProject {
       name: 'Projet CPREY DRAW',
       updatedAt: now,
     },
+    site: createDefaultSiteInformation(),
+    origin: createDefaultProjectOrigin(),
+    status: 'draft',
+    ownership: createDefaultProjectOwnership(),
+    access: createDefaultProjectAccess(),
+    audit: createProjectAudit(now),
     drawing: {
       viewport: { x: 0, y: 0, scale: 1 },
       metersPerPixel: null,
@@ -49,7 +69,13 @@ export function createEmptyProject(): CpreyDrawProject {
     apparatus: [],
     ducts: [],
     layers: createBaseLayers(),
+    study: undefined,
+    activeLevelId: undefined,
   };
+}
+
+export function createEmptyProject(): CpreyDrawProject {
+  return createDefaultProject();
 }
 
 interface LegacyPlanImage {
@@ -91,6 +117,8 @@ function normalizePlan(plan: Plan | LegacyPlanImage): Plan {
 type LegacyProject = CpreyDrawProject & { connections?: LegacyDuct[] };
 
 function normalizeProject(project: LegacyProject): CpreyDrawProject {
+  const migrationDate = new Date().toISOString();
+  const auditFallbackDate = project.project?.updatedAt ?? migrationDate;
   const rawApparatus = Array.isArray(project.apparatus) ? project.apparatus : [];
   const rawDucts = Array.isArray(project.ducts) && project.ducts.length > 0
     ? project.ducts
@@ -98,8 +126,19 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
       ? project.connections
       : [];
 
+  const normalizedStudy = normalizeImportedStudy(project.study);
+  const activeLevelId = typeof project.activeLevelId === 'string' &&
+    normalizedStudy?.levels.some((level) => level.id === project.activeLevelId)
+    ? project.activeLevelId
+    : undefined;
   const normalizedProject: CpreyDrawProject = {
     ...project,
+    site: normalizeSiteInformation(project.site),
+    origin: normalizeProjectOrigin(project.origin),
+    status: normalizeProjectStatus(project.status),
+    ownership: normalizeProjectOwnership(project.ownership),
+    access: normalizeProjectAccess(project.access),
+    audit: normalizeProjectAudit(project.audit, auditFallbackDate),
     drawing: {
       viewport: project.drawing.viewport,
       metersPerPixel: project.drawing.metersPerPixel,
@@ -122,12 +161,14 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
     ),
     ducts: rawDucts.map((duct) => normalizeDuct(duct, project)),
     layers: Array.isArray(project.layers) ? project.layers : createBaseLayers(),
+    study: normalizedStudy,
+    activeLevelId,
   };
 
-  return {
+  return syncStudyWithDrawing({
     ...normalizedProject,
     layers: getProjectLayers(normalizedProject),
-  };
+  });
 }
 
 function normalizeElectricalPanel(panel: ElectricalPanel): ElectricalPanel {
@@ -205,6 +246,9 @@ function normalizeApparatus(
     labelOffsetY: apparatus.labelOffsetY ?? 0,
     labelLocked: apparatus.labelLocked ?? false,
     comments: apparatus.comments ?? '',
+    studyDeviceIds: Array.isArray(apparatus.studyDeviceIds)
+      ? apparatus.studyDeviceIds.filter((studyDeviceId) => typeof studyDeviceId === 'string')
+      : undefined,
   };
 }
 
@@ -324,27 +368,41 @@ export const ProjectStorage = {
     const rawProject = window.localStorage.getItem(STORAGE_KEY);
 
     if (!rawProject) {
-      return createEmptyProject();
+      return createDefaultProject();
     }
 
     try {
       const parsed: unknown = JSON.parse(rawProject);
-      return isProject(parsed) ? normalizeProject(parsed) : createEmptyProject();
+      return isProject(parsed) ? normalizeProject(parsed) : createDefaultProject();
     } catch {
-      return createEmptyProject();
+      return createDefaultProject();
     }
   },
 
   save(project: CpreyDrawProject): void {
+    const updatedAt = new Date().toISOString();
+    const existingSite = project.site ?? createDefaultSiteInformation();
+    const syncedProject = syncStudyWithDrawing(project);
     const projectToSave: CpreyDrawProject = {
-      ...project,
+      ...syncedProject,
       project: {
-        ...project.project,
-        updatedAt: new Date().toISOString(),
+        ...syncedProject.project,
+        updatedAt,
+      },
+      site: normalizeSiteInformation(existingSite),
+      audit: {
+        ...syncedProject.audit,
+        updatedAt,
       },
     };
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projectToSave));
+  },
+
+  createNew(): CpreyDrawProject {
+    const project = createDefaultProject();
+    this.save(project);
+    return this.load();
   },
 
   clear(): void {

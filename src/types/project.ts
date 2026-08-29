@@ -51,6 +51,15 @@ export interface DrawableObject {
   displayScale?: number;
 }
 
+export interface CdefImportContext {
+  source: 'CDEF';
+  importedAt: string;
+  levelName?: string;
+  roomName?: string;
+  roomProfile?: string;
+  metricKey?: string;
+}
+
 export interface ElectricalPanel extends DrawableObject {
   type: 'electrical-panel';
   widthMeters: number;
@@ -100,6 +109,7 @@ export interface Octopus extends DrawableObject {
   ports: OctopusPort[];
   outputOverrides: OctopusOutputOverride[];
   comments: string;
+  importContext?: CdefImportContext;
 }
 
 export type ApparatusCatalogId =
@@ -120,7 +130,10 @@ export type ApparatusCatalogId =
   | 'hotte'
   | 'interrupteur-poussoir'
   | 'interrupteur-simple'
+  | 'interrupteur-v&v'
   | 'interrupteur-double'
+  | 'Interrupteur-double-v'
+  | 'Interrupteur-double-vV'
   | 'lave-linge'
   | 'lave-vaisselle'
   | 'plaque-cuisson'
@@ -152,6 +165,8 @@ export interface ApparatusInstance extends DrawableObject {
   labelOffsetY: number;
   labelLocked: boolean;
   comments: string;
+  importContext?: CdefImportContext;
+  studyDeviceIds?: string[];
 }
 
 export type ConnectionTargetType = 'apparatus' | 'electrical-panel';
@@ -252,15 +267,172 @@ export interface DrawingState {
   apparatusGlobalScale: number;
 }
 
+export type StudyDeviceType = 'apparatus' | 'octopus';
+
+export type StudyDeviceStatus = 'unplaced' | 'placed';
+
+export interface StudyRoom {
+  id: string;
+  levelId: string;
+  name: string;
+  profile?: string;
+}
+
+export interface StudyLevel {
+  id: string;
+  code?: string;
+  name: string;
+  rooms: StudyRoom[];
+}
+
+export interface StudyDevice {
+  id: string;
+  type: StudyDeviceType;
+  catalogId?: string;
+  modelId?: string;
+  identifier?: string;
+  sourceType?: string;
+  drawingCatalogId?: ApparatusCatalogId;
+  physicalGroupId?: string;
+  levelId?: string;
+  roomId?: string;
+  drawingObjectId?: string;
+  status: StudyDeviceStatus;
+  metricKey?: string;
+}
+
+export interface StudyPhysicalGroup {
+  id: string;
+  studyDeviceIds: string[];
+  drawingCatalogId: ApparatusCatalogId;
+  drawingObjectId?: string;
+}
+
+export interface StudyOctopus {
+  octopusId: string;
+  installationLevelId?: string;
+  installationRoomId?: string;
+  servedRoomIds?: string[];
+}
+
+export type OctopusPortAssignmentSource = 'imported' | 'manual';
+
+export interface OctopusPortAssignment {
+  id: string;
+  octopusId: string;
+  portNumber: number;
+  studyDeviceId: string;
+  source: OctopusPortAssignmentSource;
+}
+
+export interface ImportedStudy {
+  levels: StudyLevel[];
+  devices: StudyDevice[];
+  physicalGroups?: StudyPhysicalGroup[];
+  octopuses?: StudyOctopus[];
+  portAssignments?: OctopusPortAssignment[];
+}
+
 export interface ProjectInfo {
   id: string;
   name: string;
   updatedAt: string;
 }
 
+export interface SiteInformation {
+  name?: string;
+  reference?: string;
+  quoteReference?: string;
+  clientName?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  builder?: string;
+  electrician?: string;
+  distributor?: string;
+  projectVersion?: string;
+  comments?: string;
+}
+
+export type ProjectOriginType = 'manual' | 'configurator';
+
+export interface ConfiguratorSummary {
+  level?: 'MIN' | 'MOY' | 'MAX';
+  requestedOctopuses?: {
+    modelId: string;
+    quantity: number;
+  }[];
+  requestedApparatus?: {
+    catalogId: string;
+    type: string;
+    quantity: number;
+  }[];
+}
+
+export interface CdefProjectOriginMetadata {
+  schemaVersion: 1;
+  levels: string[];
+  rooms: {
+    levelName: string;
+    roomName: string;
+    profile?: string;
+  }[];
+  unknownMetrics?: {
+    levelName: string;
+    roomName: string;
+    metricKey: string;
+    quantity: number;
+  }[];
+}
+
+export interface ProjectOrigin {
+  type: ProjectOriginType;
+  quoteId?: string;
+  configuratorVersion?: string;
+  importedAt?: string;
+  sourceFile?: string;
+  sourceHash?: string;
+  sourceApplication?: string;
+  sourceVariant?: string;
+  sourceVersion?: string;
+  exportedAt?: string;
+  selectedScenario?: 'MIN' | 'MOY' | 'MAX';
+  configuratorSummary?: ConfiguratorSummary;
+  cdef?: CdefProjectOriginMetadata;
+}
+
+export type ProjectStatus = 'draft' | 'design' | 'review' | 'validated' | 'in-progress' | 'archived';
+
+export interface ProjectOwnership {
+  ownerUserId?: string;
+  ownerOrganizationId?: string;
+}
+
+export type ProjectRole = 'installer' | 'cprey-support' | 'admin' | 'viewer';
+
+export interface ProjectAccess {
+  editableBy?: string[];
+  viewableBy?: string[];
+}
+
+export interface ProjectAudit {
+  createdAt: string;
+  createdBy?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 export interface CpreyDrawProject {
   schemaVersion: 1;
   project: ProjectInfo;
+  site: SiteInformation;
+  origin: ProjectOrigin;
+  status: ProjectStatus;
+  ownership: ProjectOwnership;
+  access: ProjectAccess;
+  audit: ProjectAudit;
   drawing: DrawingState;
   plans: Plan[];
   electricalPanel?: ElectricalPanel;
@@ -268,4 +440,6 @@ export interface CpreyDrawProject {
   apparatus: ApparatusInstance[];
   ducts: Duct[];
   layers: DrawingLayer[];
+  study?: ImportedStudy;
+  activeLevelId?: string;
 }

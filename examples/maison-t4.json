@@ -1,0 +1,63 @@
+{
+  "schema": "CDEF",
+  "schemaVersion": 1,
+  "header": {
+    "application": "smartcprey-configurator",
+    "variant": "LM",
+    "applicationVersion": "1.8.0",
+    "exportedAt": "2026-08-23T10:00:00.000Z"
+  },
+  "configuration": {},
+  "project": {
+    "projectName": "Type_T4-AH",
+    "levels": {
+      "0 : RDC": {
+        "Séjour": {
+          "prises": 4,
+          "lampes": 1,
+          "interrupteurs": 1,
+          "vr": 1,
+          "__profile": "SEJOUR"
+        },
+        "Cuisine 1": {
+          "prises": 6,
+          "lampes": 2,
+          "interrupteurs": 2,
+          "four": 1,
+          "hotte": 1,
+          "lave_vaisselle": 1,
+          "vr": 1,
+          "prises_spec": 3,
+          "__profile": "CUISINE"
+        }
+      }
+    }
+  },
+  "calculations": {
+    "pieuvres": {
+      "totals": {
+        "cuisine": 1,
+        "bain": 2,
+        "confort": 1,
+        "autre": 5,
+        "total": 9
+      }
+    }
+  },
+  "scenario": {
+    "selected": "MOY",
+    "result": {
+      "totals": {
+        "cuisine": 1,
+        "bain": 2,
+        "confort": 1,
+        "autre": 4,
+        "total": 8
+      }
+    }
+  },
+  "metadata": {
+    "projectName": "Type_T4-AH"
+  },
+  "extensions": {}
+}

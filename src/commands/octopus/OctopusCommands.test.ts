@@ -14,6 +14,7 @@ import {
   getOctopusPixelSize,
   OCTOPUS_PORTS,
 } from '../../domain/octopus';
+import { createImportedStudy } from '../../domain/importedStudy';
 import { createOctopusOutputOverride } from '../../domain/octopusOutputs';
 import { createEmptyProject } from '../../storage/ProjectStorage';
 import type { CpreyDrawProject, OctopusModelId } from '../../types/project';
@@ -197,6 +198,33 @@ test('updates rotation and deletes octopus with undo restore', () => {
   deleteCommand.undo();
   assert.equal(project.octopuses[0]?.modelId, 'comfort');
   assert.equal(project.octopuses[0]?.rotation, 90);
+});
+
+test('deleting imported octopus marks its study device unplaced', () => {
+  const octopus = {
+    ...createOctopus('kitchen', { x: 10, y: 20 }, []),
+    importContext: {
+      source: 'CDEF' as const,
+      importedAt: '2026-08-26T10:00:00.000Z',
+    },
+  };
+  const study = createImportedStudy([], [octopus]);
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    octopuses: [octopus],
+    study,
+  };
+  const command = createDeleteOctopusCommand(project, octopus.id, (nextProject) => {
+    project = nextProject;
+  });
+
+  command.execute();
+  assert.equal(project.study?.devices[0].status, 'unplaced');
+  assert.equal(project.study?.devices[0].drawingObjectId, undefined);
+
+  command.undo();
+  assert.equal(project.study?.devices[0].status, 'placed');
+  assert.equal(project.study?.devices[0].drawingObjectId, octopus.id);
 });
 
 test('updates display scale with undo and redo', () => {

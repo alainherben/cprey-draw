@@ -19,12 +19,18 @@ import garageNoirUrl from '../assets/pictos/GarageFermer_Noir.svg';
 import garageVertUrl from '../assets/pictos/GarageFermer_Vert.svg';
 import hotteNoirUrl from '../assets/pictos/Hotte_Noir.svg';
 import hotteVertUrl from '../assets/pictos/Hotte_Vert.svg';
-import interrupteurDoubleNoirUrl from '../assets/pictos/InterrupteurDouble_Noir.svg';
-import interrupteurDoubleVertUrl from '../assets/pictos/InterrupteurDouble_Vert.svg';
-import interrupteurFermerNoirUrl from '../assets/pictos/InterrupteurFermer_Noir.svg';
-import interrupteurFermerVertUrl from '../assets/pictos/InterrupteurFermer_Vert.svg';
-import interrupteurOuvertNoirUrl from '../assets/pictos/InterrupteurOuvert_Noir.svg';
-import interrupteurOuvertVertUrl from '../assets/pictos/InterrupteurOuvert_Vert.svg';
+import interrupteurDoubleSNoirUrl from '../assets/pictos/InterrupteurDoubleS_Noir.svg';
+import interrupteurDoubleSVertUrl from '../assets/pictos/InterrupteurDoubleS_Vert.svg';
+import interrupteurDoubleVNoirUrl from '../assets/pictos/InterrupteurDoubleV_Noir.svg';
+import interrupteurDoubleVVertUrl from '../assets/pictos/InterrupteurDoubleV_Vert.svg';
+import interrupteurDoubleVVNoirUrl from '../assets/pictos/InterrupteurDoubleVV_Noir.svg';
+import interrupteurDoubleVVVertUrl from '../assets/pictos/InterrupteurDoubleVV_Vert.svg';
+import interrupteurPoussoirNoirUrl from '../assets/pictos/InterrupteurPoussoir_Noir.svg';
+import interrupteurPoussoirVertUrl from '../assets/pictos/InterrupteurPoussoir_Vert.svg';
+import interrupteurSimpleNoirUrl from '../assets/pictos/InterrupteurSimple_Noir.svg';
+import interrupteurSimpleVertUrl from '../assets/pictos/InterrupteurSimple_Vert.svg';
+import interrupteurVaVientNoirUrl from '../assets/pictos/InterrupteurVa&Vient_Noir.svg';
+import interrupteurVaVientVertUrl from '../assets/pictos/InterrupteurVa&Vient_Vert.svg';
 import laveLingeNoirUrl from '../assets/pictos/LaveLinge_Noir.svg';
 import laveLingeVertUrl from '../assets/pictos/LaveLinge_Vert.svg';
 import laveVaisselleNoirUrl from '../assets/pictos/LaveVaiselle_Noir.svg';
@@ -87,9 +93,12 @@ export const APPARATUS_ICON_URLS: Record<ApparatusCatalogId, ApparatusAssetPair>
   frigo: { black: frigoNoirUrl, green: frigoVertUrl },
   garage: { black: garageNoirUrl, green: garageVertUrl },
   hotte: { black: hotteNoirUrl, green: hotteVertUrl },
-  'interrupteur-poussoir': { black: interrupteurOuvertNoirUrl, green: interrupteurOuvertVertUrl },
-  'interrupteur-simple': { black: interrupteurFermerNoirUrl, green: interrupteurFermerVertUrl },
-  'interrupteur-double': { black: interrupteurDoubleNoirUrl, green: interrupteurDoubleVertUrl },
+  'interrupteur-poussoir': { black: interrupteurPoussoirNoirUrl, green: interrupteurPoussoirVertUrl },
+  'interrupteur-simple': { black: interrupteurSimpleNoirUrl, green: interrupteurSimpleVertUrl },
+  'interrupteur-v&v': { black: interrupteurVaVientNoirUrl, green: interrupteurVaVientVertUrl },
+  'interrupteur-double': { black: interrupteurDoubleSNoirUrl, green: interrupteurDoubleSVertUrl },
+  'Interrupteur-double-v': { black: interrupteurDoubleVNoirUrl, green: interrupteurDoubleVVertUrl },
+  'Interrupteur-double-vV': { black: interrupteurDoubleVVNoirUrl, green: interrupteurDoubleVVVertUrl },
   'lave-linge': { black: laveLingeNoirUrl, green: laveLingeVertUrl },
   'lave-vaisselle': { black: laveVaisselleNoirUrl, green: laveVaisselleVertUrl },
   'plaque-cuisson': { black: plaqueCuissonNoirUrl, green: plaqueCuissonVertUrl },

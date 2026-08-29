@@ -60,7 +60,7 @@ export function buildPdfDocumentModel(
     project,
     options,
     generatedAt,
-    filename: buildPdfFilename(project.project.name, generatedAt),
+    filename: buildPdfFilename(project, generatedAt),
     pages,
     nomenclature,
     validation,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getApparatusCatalogMenuItems } from '../catalog/apparatus';
-import type { ApparatusCatalogId, DrawingLayer, OctopusModelId, Plan, ToolMode } from '../types/project';
+import type { ApparatusCatalogId, DrawingLayer, OctopusModelId, Plan, StudyLevel, ToolMode } from '../types/project';
 
 type MenuId = 'project' | 'plan' | 'insert' | 'view' | 'layers' | 'measure' | 'history';
 
@@ -19,7 +19,10 @@ interface ToolbarProps {
   hasScaleReference: boolean;
   scaleMarkerVisible: boolean;
   layers: DrawingLayer[];
+  studyLevels: StudyLevel[];
+  activeLevelId?: string;
   onImportPlan: (file: File) => void;
+  onImportConfiguratorProject: (file: File) => void;
   onFitToScreen: () => void;
   onToggleWheelZoom: () => void;
   onToggleMovementLocked: () => void;
@@ -27,8 +30,10 @@ interface ToolbarProps {
   onToggleScaleMarkerVisible: () => void;
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
+  onOpenSiteInformation: () => void;
   onOpenNomenclature: () => void;
   onOpenValidation: () => void;
+  onOpenImportedStudy: () => void;
   onOpenPdfExport: () => void;
   onStartElectricalPanelPlacement: () => void;
   onStartOctopusPlacement: (modelId: OctopusModelId) => void;
@@ -42,6 +47,8 @@ interface ToolbarProps {
   onTogglePlanLocked: () => void;
   onChangePlanOpacity: (opacity: number) => void;
   onChangePlanRotation: (rotation: number) => void;
+  onNewProject: () => void;
+  onChangeActiveLevel: (levelId: string) => void;
 }
 
 export function Toolbar({
@@ -59,7 +66,10 @@ export function Toolbar({
   hasScaleReference,
   scaleMarkerVisible,
   layers,
+  studyLevels,
+  activeLevelId,
   onImportPlan,
+  onImportConfiguratorProject,
   onFitToScreen,
   onToggleWheelZoom,
   onToggleMovementLocked,
@@ -67,8 +77,10 @@ export function Toolbar({
   onToggleScaleMarkerVisible,
   onToggleLayerVisible,
   onSaveProject,
+  onOpenSiteInformation,
   onOpenNomenclature,
   onOpenValidation,
+  onOpenImportedStudy,
   onOpenPdfExport,
   onStartElectricalPanelPlacement,
   onStartOctopusPlacement,
@@ -82,11 +94,15 @@ export function Toolbar({
   onTogglePlanLocked,
   onChangePlanOpacity,
   onChangePlanRotation,
+  onNewProject,
+  onChangeActiveLevel,
 }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const toolbarRef = useRef<HTMLElement | null>(null);
   const hasPlan = activePlan !== null;
   const apparatusMenuItems = getApparatusCatalogMenuItems();
+  const newProjectShortcut =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? 'Cmd+N' : 'Ctrl+N';
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -131,7 +147,17 @@ export function Toolbar({
           openMenu={openMenu}
           onToggle={setOpenMenu}
         >
+          <MenuItem label="Nouveau projet" shortcut={newProjectShortcut} onSelect={() => runAndClose(onNewProject)} />
+          <div className="menu-separator" />
           <MenuItem label="Sauvegarder" onSelect={() => runAndClose(onSaveProject)} />
+          <JsonFileMenuItem
+            label="Importer depuis un configurateur"
+            onImport={(file) => {
+              onImportConfiguratorProject(file);
+              setOpenMenu(null);
+            }}
+          />
+          <MenuItem label="Informations chantier" onSelect={() => runAndClose(onOpenSiteInformation)} />
           <MenuItem label="Exporter en PDF" onSelect={() => runAndClose(onOpenPdfExport)} />
           <MenuItem label="Nomenclature" onSelect={() => runAndClose(onOpenNomenclature)} />
           <MenuItem label="Contrôles" onSelect={() => runAndClose(onOpenValidation)} />
@@ -256,6 +282,8 @@ export function Toolbar({
             label={showDuctLengths ? '✓ Afficher les longueurs de gaines' : 'Afficher les longueurs de gaines'}
             onSelect={() => runAndClose(onToggleShowDuctLengths)}
           />
+          <div className="menu-separator" />
+          <MenuItem label="Étude importée" disabled={studyLevels.length === 0} onSelect={() => runAndClose(onOpenImportedStudy)} />
         </MenuButton>
 
         <MenuButton id="layers" label="Calques" openMenu={openMenu} onToggle={setOpenMenu}>
@@ -308,6 +336,22 @@ export function Toolbar({
           />
         </MenuButton>
       </nav>
+
+      {studyLevels.length > 0 && (
+        <label className="level-selector">
+          <span>Niveau</span>
+          <select
+            value={activeLevelId ?? ''}
+            onChange={(event) => onChangeActiveLevel(event.currentTarget.value)}
+          >
+            {studyLevels.map((level) => (
+              <option key={level.id} value={level.id}>
+                {level.code ? `${level.code} : ${level.name}` : level.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <div className="quick-actions" aria-label="Actions rapides">
         <button
@@ -366,6 +410,32 @@ export function Toolbar({
           : `Échelle : ${(1 / metersPerPixel).toFixed(1)} px/m`}
       </div>
     </header>
+  );
+}
+
+interface JsonFileMenuItemProps {
+  label: string;
+  disabled?: boolean;
+  onImport: (file: File) => void;
+}
+
+function JsonFileMenuItem({ label, disabled = false, onImport }: JsonFileMenuItemProps) {
+  return (
+    <label className={`menu-item file-menu-item ${disabled ? 'disabled' : ''}`} role="menuitem">
+      <span>{label}</span>
+      <input
+        type="file"
+        accept="application/json,.json"
+        disabled={disabled}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            onImport(file);
+            event.currentTarget.value = '';
+          }
+        }}
+      />
+    </label>
   );
 }
 

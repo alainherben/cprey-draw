@@ -7,6 +7,7 @@ import {
   createUpdateApparatusCommand,
 } from './ApparatusCommands';
 import { createApparatusInstance, getApparatusPixelSize } from '../../domain/apparatus';
+import { createImportedStudy } from '../../domain/importedStudy';
 import { createEmptyProject } from '../../storage/ProjectStorage';
 import type { CpreyDrawProject } from '../../types/project';
 
@@ -192,4 +193,135 @@ test('deletes apparatus and undo restores the complete instance', () => {
   assert.equal(project.apparatus[0]?.connected, true);
   assert.equal(project.apparatus[0]?.rotation, 90);
   assert.equal(project.apparatus[0]?.comments, 'Combles');
+});
+
+test('deleting imported apparatus marks its study device unplaced', () => {
+  const apparatus = {
+    ...createApparatusInstance('prise-16a', { x: 10, y: 20 }, []),
+    identifier: 'PR1',
+    importContext: {
+      source: 'CDEF' as const,
+      importedAt: '2026-08-26T10:00:00.000Z',
+      levelName: '0 : RDC',
+      roomName: 'Salon',
+      roomProfile: 'SALON',
+      metricKey: 'prises',
+    },
+  };
+  const study = createImportedStudy([apparatus], []);
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    apparatus: [apparatus],
+    study,
+  };
+  const command = createDeleteApparatusCommand(project, apparatus.id, (nextProject) => {
+    project = nextProject;
+  });
+
+  command.execute();
+  assert.equal(project.study?.devices[0].status, 'unplaced');
+  assert.equal(project.study?.devices[0].drawingObjectId, undefined);
+
+  command.undo();
+  assert.equal(project.study?.devices[0].status, 'placed');
+  assert.equal(project.study?.devices[0].drawingObjectId, apparatus.id);
+});
+
+test('adding apparatus from an unplaced study device links it with undo and redo', () => {
+  const imported = {
+    ...createApparatusInstance('lampe', { x: 10, y: 20 }, []),
+    identifier: 'LA1',
+    importContext: {
+      source: 'CDEF' as const,
+      importedAt: '2026-08-26T10:00:00.000Z',
+      levelName: '0 : RDC',
+      roomName: 'Salon',
+      roomProfile: 'SALON',
+      metricKey: 'lampes',
+    },
+  };
+  const study = createImportedStudy([imported], []);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  const unplacedDevice = {
+    ...study.devices[0],
+    drawingObjectId: undefined,
+    status: 'unplaced' as const,
+  };
+  const apparatus = {
+    ...createApparatusInstance('lampe', { x: 40, y: 50 }, []),
+    identifier: unplacedDevice.identifier ?? 'LA1',
+  };
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    apparatus: [],
+    study: {
+      ...study,
+      devices: [unplacedDevice],
+    },
+  };
+  const command = createAddApparatusCommand(project, apparatus, (nextProject) => {
+    project = nextProject;
+  }, unplacedDevice.id);
+
+  command.execute();
+  assert.equal(project.apparatus[0]?.id, apparatus.id);
+  assert.equal(project.study?.devices[0].status, 'placed');
+  assert.equal(project.study?.devices[0].drawingObjectId, apparatus.id);
+
+  command.undo();
+  assert.equal(project.apparatus.length, 0);
+  assert.equal(project.study?.devices[0].status, 'unplaced');
+  assert.equal(project.study?.devices[0].drawingObjectId, undefined);
+
+  command.redo();
+  assert.equal(project.apparatus[0]?.id, apparatus.id);
+  assert.equal(project.study?.devices[0].status, 'placed');
+  assert.equal(project.study?.devices[0].drawingObjectId, apparatus.id);
+});
+
+test('does not place an already placed study group a second time', () => {
+  const first = {
+    ...createApparatusInstance('prise-16a', { x: 10, y: 20 }, []),
+    identifier: 'PR1',
+    importContext: {
+      source: 'CDEF' as const,
+      importedAt: '2026-08-27T10:00:00.000Z',
+      levelName: '0 : RDC',
+      roomName: 'Salon',
+      roomProfile: 'SALON',
+      metricKey: 'prises',
+    },
+  };
+  const second = {
+    ...createApparatusInstance('prise-16a', { x: 12, y: 22 }, [first]),
+    identifier: 'PR2',
+    importContext: first.importContext,
+  };
+  const study = createImportedStudy([first, second], []);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  const apparatus = {
+    ...createApparatusInstance('prise_double', { x: 40, y: 50 }, []),
+    studyDeviceIds: ['device_001', 'device_002'],
+  };
+  const project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    apparatus: [apparatus],
+    study: {
+      ...study,
+      devices: study.devices.map((device) => ({
+        ...device,
+        drawingObjectId: apparatus.id,
+        status: 'placed' as const,
+      })),
+    },
+  };
+
+  assert.throws(
+    () => createAddApparatusCommand(project, createApparatusInstance('prise_double', { x: 60, y: 70 }, []), () => {}, ['device_001', 'device_002']),
+    /déjà placé/,
+  );
 });

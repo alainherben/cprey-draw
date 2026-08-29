@@ -1,7 +1,7 @@
 import type { jsPDF } from 'jspdf';
 import { getApparatusCatalogItem } from '../../catalog/apparatus';
 import { buildPdfDocumentModel } from './PdfDocumentModel';
-import { formatPdfDate, formatPdfLength } from './PdfLayout';
+import { formatPdfDate, formatPdfLength, getPdfCoverRows } from './PdfLayout';
 import { renderPdfPlanPage } from './PdfDrawingRenderer';
 import type { ApparatusCatalogId, CpreyDrawProject } from '../../types/project';
 import type { PdfDocumentModel, PdfExportOptions, PdfPageModel } from './PdfTypes';
@@ -58,13 +58,16 @@ function renderCoverPage(doc: jsPDF, model: PdfDocumentModel) {
   doc.text('CPREY DRAW', 20, 34);
 
   doc.setFontSize(18);
-  doc.text('Dossier électrique', 20, 48);
+  doc.text('DOSSIER CHANTIER', 20, 48);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text(`Projet : ${model.project.project.name}`, 20, 68);
-  doc.text(`Date : ${formatPdfDate(model.generatedAt)}`, 20, 76);
-  doc.text('Version : V1.6', 20, 84);
+  const coverRows = getPdfCoverRows(model.project);
+  renderKeyValueRows(doc, 20, 66, [
+    ...coverRows,
+    ['Date', formatPdfDate(model.generatedAt)],
+    ['Version CPREY DRAW', 'V1.8'],
+  ]);
 
   const warningText = model.validation.errorCount > 0
     ? 'Projet comportant des erreurs'
@@ -74,12 +77,12 @@ function renderCoverPage(doc: jsPDF, model: PdfDocumentModel) {
 
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(model.validation.errorCount > 0 ? '#b91c1c' : '#166534');
-  doc.text(warningText, 20, 100);
+  doc.text(warningText, 20, 122);
 
   doc.setTextColor('#111827');
   doc.setFontSize(12);
-  doc.text('Résumé', 20, 118);
-  renderKeyValueRows(doc, 20, 128, [
+  doc.text('Résumé', 20, 140);
+  renderKeyValueRows(doc, 20, 150, [
     ['Pieuvres', String(model.nomenclature.summary.octopusCount)],
     ['Appareillages', String(model.nomenclature.summary.apparatusCount)],
     ['Gaines', String(model.nomenclature.summary.ductCount)],

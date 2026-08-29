@@ -2,19 +2,39 @@ import type { CpreyDrawProject, Octopus, OctopusOutputOverride, Point } from '..
 import type { ApplyProject } from '../CommandManager';
 import { ProjectSnapshotCommand } from '../ProjectSnapshotCommand';
 import { isSameOctopusOutput } from '../../domain/ducts';
+import { markStudyDevicesPlaced, syncStudyWithDrawing } from '../../domain/importedStudy';
 import { removeOctopusOutputOverride, upsertOctopusOutputOverride } from '../../domain/octopusOutputs';
 
 export function createAddOctopusCommand(
   before: CpreyDrawProject,
   octopus: Octopus,
   applyProject: ApplyProject,
+  studyDeviceIds: string | string[] = [],
 ): ProjectSnapshotCommand {
+  const linkedStudyDeviceIds = Array.isArray(studyDeviceIds) ? studyDeviceIds : [studyDeviceIds].filter(Boolean);
+  ensureStudyDevicesAreUnplaced(before, linkedStudyDeviceIds);
+  const after = syncStudyWithDrawing(markStudyDevicesPlaced({
+    ...before,
+    octopuses: [...before.octopuses, octopus],
+  }, linkedStudyDeviceIds, octopus.id));
+
   return new ProjectSnapshotCommand(
     'Ajouter une pieuvre',
     before,
-    { ...before, octopuses: [...before.octopuses, octopus] },
+    after,
     applyProject,
   );
+}
+
+function ensureStudyDevicesAreUnplaced(project: CpreyDrawProject, studyDeviceIds: string[]): void {
+  if (!project.study || studyDeviceIds.length === 0) {
+    return;
+  }
+
+  const ids = new Set(studyDeviceIds);
+  if (project.study.devices.some((device) => ids.has(device.id) && (device.status === 'placed' || device.drawingObjectId))) {
+    throw new Error('Cet appareillage est déjà placé.');
+  }
 }
 
 export function createMoveOctopusCommand(
@@ -99,7 +119,7 @@ export function createDeleteOctopusCommand(
   octopusId: string,
   applyProject: ApplyProject,
 ): ProjectSnapshotCommand {
-  const after: CpreyDrawProject = {
+  const after: CpreyDrawProject = syncStudyWithDrawing({
     ...before,
     octopuses: before.octopuses.filter((octopus) => octopus.id !== octopusId),
     ducts: before.ducts.filter(
@@ -107,7 +127,7 @@ export function createDeleteOctopusCommand(
         !isSameOctopusOutput(duct.source, octopusId) &&
         !isSameOctopusOutput(duct.circuitOrigin, octopusId),
     ),
-  };
+  });
 
   return new ProjectSnapshotCommand('Supprimer une pieuvre', before, after, applyProject);
 }

@@ -10,8 +10,8 @@ import {
 
 const pictos = readdirSync('src/assets/pictos');
 
-test('apparatus catalog contains the 32 official items', () => {
-  assert.equal(APPARATUS_CATALOG.length, 32);
+test('apparatus catalog contains the 35 official items', () => {
+  assert.equal(APPARATUS_CATALOG.length, 35);
   assert.deepEqual(validateApparatusCatalog(pictos), []);
 });
 
@@ -69,6 +69,31 @@ test('apparatus catalog exposes the four PR socket variants', () => {
     assert.equal(item.category, 'outlet');
     assert.equal(item.svg, svg);
     assert.equal(item.directSupply, false);
+  }
+});
+
+test('apparatus catalog exposes the six IN switch variants from v2 reference', () => {
+  const switches = [
+    ['interrupteur-poussoir', 'Poussoir', 'InterrupteurPoussoir_Noir.svg'],
+    ['interrupteur-simple', 'Interrupteur simple', 'InterrupteurSimple_Noir.svg'],
+    ['interrupteur-v&v', 'Interrupteur va&vient', 'InterrupteurVa&Vient_Noir.svg'],
+    ['interrupteur-double', 'Interrupteur double', 'InterrupteurDoubleS_Noir.svg'],
+    ['Interrupteur-double-v', 'Interrupteur double v&v', 'InterrupteurDoubleV_Noir.svg'],
+    ['Interrupteur-double-vV', 'Interrupteur double 2v&v', 'InterrupteurDoubleVV_Noir.svg'],
+  ] as const;
+
+  for (const [catalogId, name, svg] of switches) {
+    const item = getApparatusCatalogItem(catalogId);
+    assert.equal(item.type, 'IN');
+    assert.equal(item.name, name);
+    assert.equal(item.category, 'Switch');
+    assert.equal(item.svg, svg);
+    assert.equal(item.connectedDefault, false);
+    assert.equal(item.defaultDisplayScale, 2);
+    assert.equal(item.defaultHeightMeters, 1.2);
+    assert.equal(item.heightReference, 'floor');
+    assert.equal(item.directSupply, false);
+    assert.equal(item.revision, 1);
   }
 });
 

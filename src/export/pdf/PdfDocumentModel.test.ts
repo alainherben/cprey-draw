@@ -20,6 +20,8 @@ import {
   createOctopusPlanScope,
   fitDrawingToPdfPage,
   formatPdfLength,
+  getPdfCartoucheItems,
+  getPdfCoverRows,
   getPdfPageSize,
 } from './PdfLayout';
 import { DEFAULT_PDF_EXPORT_OPTIONS } from './PdfTypes';
@@ -298,10 +300,86 @@ test('PDF duct length rendering options do not change nomenclature totals', () =
 });
 
 test('generates a safe deterministic PDF filename', () => {
+  const project = {
+    ...createEmptyProject(),
+    site: {
+      name: 'Maison / Rue de l’Église: Lot 2',
+      reference: 'CP 2026/0012',
+    },
+  };
+
   assert.equal(
-    buildPdfFilename('Maison / Rue de l’Église: Lot 2', new Date('2026-08-16T10:15:00.000Z')),
-    'CPREY-DRAW_Maison-Rue-de-lEglise-Lot-2_2026-08-16.pdf',
+    buildPdfFilename(project, new Date('2026-08-16T10:15:00.000Z')),
+    'CPREY_DRAW_Maison_Rue_de_lEglise_Lot_2_CP_2026_0012_2026-08-16.pdf',
   );
+});
+
+test('builds PDF cover and cartouche metadata from chantier information', () => {
+  const project = {
+    ...createEmptyProject(),
+    site: {
+      name: 'Maison Dupont',
+      reference: 'CP-2026-0012',
+      quoteReference: 'DEV-4582',
+      clientName: 'M. Dupont',
+      address: '12 rue des Pins',
+      postalCode: '44000',
+      city: 'Nantes',
+      electrician: 'Élec Atlantique',
+      distributor: 'Magasin CPREY',
+      projectVersion: 'V3',
+    },
+    status: 'validated' as const,
+  };
+
+  assert.deepEqual(getPdfCoverRows(project), [
+    ['Nom chantier', 'Maison Dupont'],
+    ['Client', 'M. Dupont'],
+    ['Adresse', '12 rue des Pins, 44000 Nantes'],
+    ['Référence chantier', 'CP-2026-0012'],
+    ['Référence devis', 'DEV-4582'],
+    ['Électricien', 'Élec Atlantique'],
+    ['Magasin / Distributeur', 'Magasin CPREY'],
+    ['Statut', 'Validé'],
+    ['Version', 'V3'],
+  ]);
+
+  assert.deepEqual(
+    getPdfCartoucheItems(project, new Date('2026-08-16T10:15:00.000Z'), 2, 7),
+    [
+      ['Projet', 'Maison Dupont'],
+      ['Référence', 'CP-2026-0012'],
+      ['Version', 'V3'],
+      ['Statut', 'Validé'],
+      ['Date', '16/08/2026'],
+      ['Page', '2 / 7'],
+    ],
+  );
+});
+
+test('includes configurator origin on PDF cover without changing manual projects', () => {
+  const manualProject = createEmptyProject();
+  const configuratorProject = {
+    ...createEmptyProject(),
+    site: {
+      quoteReference: 'DEV-2026-00125',
+    },
+    origin: {
+      type: 'configurator' as const,
+      quoteId: 'DEV-2026-00125',
+      configuratorVersion: '2026.08',
+      configuratorSummary: {
+        level: 'MOY' as const,
+      },
+    },
+  };
+
+  assert.equal(getPdfCoverRows(manualProject).some(([label]) => label === 'Origine'), false);
+  assert.deepEqual(getPdfCoverRows(configuratorProject).slice(-3), [
+    ['Origine', 'Configurateur CPREY'],
+    ['Référence configurateur', 'DEV-2026-00125'],
+    ['Niveau configurateur', 'MOY'],
+  ]);
 });
 
 test('formats lengths with two decimals for French display', () => {

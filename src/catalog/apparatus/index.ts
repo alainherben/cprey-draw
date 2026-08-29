@@ -40,9 +40,24 @@ export const APPARATUS_CATALOG: ApparatusCatalogItem[] = [
   item('frigo', 'PR', 'Frigo', 'Fridge', 'Frigo_Gris.svg', 0.3, false),
   item('garage', 'PR', 'Garage', 'Garage', 'GarageFermer_Gris.svg', 1.2, false),
   item('hotte', 'HO', 'Hotte', 'hood', 'Hotte_Gris.svg', 2, false),
-  item('interrupteur-poussoir', 'IN', 'Poussoir', 'Switch', 'InterrupteurOuvert_Gris.svg', 1.2, false),
-  item('interrupteur-simple', 'IN', 'Interrupteur simple', 'Switch', 'InterrupteurFermer_Gris.svg', 1.2, false),
-  item('interrupteur-double', 'IN', 'Interrupteur double', 'Switch', 'InterrupteurDouble_Gris.svg', 1.2, false),
+  item('interrupteur-poussoir', 'IN', 'Poussoir', 'Switch', 'InterrupteurPoussoir_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
+  item('interrupteur-simple', 'IN', 'Interrupteur simple', 'Switch', 'InterrupteurSimple_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
+  item('interrupteur-v&v', 'IN', 'Interrupteur va&vient', 'Switch', 'InterrupteurVa&Vient_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
+  item('interrupteur-double', 'IN', 'Interrupteur double', 'Switch', 'InterrupteurDoubleS_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
+  item('Interrupteur-double-v', 'IN', 'Interrupteur double v&v', 'Switch', 'InterrupteurDoubleV_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
+  item('Interrupteur-double-vV', 'IN', 'Interrupteur double 2v&v', 'Switch', 'InterrupteurDoubleVV_Noir.svg', 1.2, false, {
+    defaultDisplayScale: 2,
+  }),
   item('lave-linge', 'SP', 'Lave linge', 'Washing machine', 'LaveLinge_Gris.svg', 0.3, false),
   item('lave-vaisselle', 'SP', 'Lave vaisselle', 'Dishwasher', 'LaveVaiselle_Gris.svg', 0.3, false),
   item('plaque-cuisson', 'SP', '32A Plaque cuisson', 'cooktop', 'PlaqueCuisson_Gris.svg', 0.3, true, {
@@ -99,8 +114,8 @@ export function validateApparatusCatalog(availableSvgFilenames: readonly string[
   const ids = APPARATUS_CATALOG.map((catalogItem) => catalogItem.id);
   const uniqueIds = new Set(ids);
 
-  if (APPARATUS_CATALOG.length !== 32) {
-    errors.push(`Le catalogue doit contenir 32 appareillages, ${APPARATUS_CATALOG.length} trouvés.`);
+  if (APPARATUS_CATALOG.length !== 35) {
+    errors.push(`Le catalogue doit contenir 35 appareillages, ${APPARATUS_CATALOG.length} trouvés.`);
   }
 
   if (ids.length !== uniqueIds.size) {

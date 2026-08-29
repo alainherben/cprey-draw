@@ -6,6 +6,8 @@ import { PropertiesPanel } from './PropertiesPanel';
 import { NomenclaturePanel } from './NomenclaturePanel';
 import { ValidationPanel } from './ValidationPanel';
 import { PdfExportDialog } from './PdfExportDialog';
+import { SiteInformationPanel } from './SiteInformationPanel';
+import { ImportedStudyPanel } from './ImportedStudyPanel';
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { ProjectStorage } from '../storage/ProjectStorage';
 import { CommandManager } from '../commands/CommandManager';
@@ -45,6 +47,8 @@ import {
   createResetDuctControlCommand,
   createUpdateDuctSpecificationCommand,
 } from '../commands/connections/ConnectionCommands';
+import { createUpdateProjectMetadataCommand } from '../commands/project/ProjectMetadataCommands';
+import { ProjectSnapshotCommand } from '../commands/ProjectSnapshotCommand';
 import {
   createApparatusInstance,
   getApparatusImageLayout,
@@ -96,6 +100,23 @@ import { buildProjectNomenclature } from '../domain/bom';
 import { validateProject, type ProjectIssue } from '../domain/projectValidation';
 import { exportProjectPdf } from '../export/pdf/PdfExporter';
 import type { PdfExportOptions } from '../export/pdf/PdfTypes';
+import { importCdefProject } from '../import/CdefProjectImporter';
+import {
+  shouldDisplayApparatusForActiveLevel,
+  shouldDisplayDuctForActiveLevel,
+  shouldDisplayOctopusForActiveLevel,
+  type StudyPlacementTarget,
+} from '../domain/importedStudy';
+import {
+  createAssignStudyDeviceToOctopusPortCommand,
+  createConfigureStudyRepresentationCommand,
+  createDissociateStudyGroupCommand,
+  createMoveStudyDeviceOctopusPortAssignmentCommand,
+  createSetStudyOctopusInstallationCommand,
+  createSetStudyOctopusServedRoomsCommand,
+  createUnassignOctopusPortCommand,
+} from '../commands/study/StudyCommands';
+import type { CdefImportResult } from '../import/CdefImportTypes';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -109,7 +130,9 @@ import type {
   OctopusOutputOverride,
   OctopusModelId,
   Plan,
+  ProjectStatus,
   Point,
+  SiteInformation,
   ToolMode,
   Viewport,
 } from '../types/project';
@@ -200,6 +223,21 @@ function readImage(file: File): Promise<Plan> {
   });
 }
 
+function readJsonFile(file: File): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Impossible de lire le fichier JSON.'));
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(String(reader.result ?? '')));
+      } catch {
+        reject(new Error('JSON invalide.'));
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
 function useHtmlImage(dataUrl: string | null): HTMLImageElement | null {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
 
@@ -235,6 +273,7 @@ export function DrawingCanvas() {
   const [activeTool, setActiveTool] = useState<ToolMode>('pan');
   const [placementOctopusModelId, setPlacementOctopusModelId] = useState<OctopusModelId | null>(null);
   const [placementApparatusCatalogId, setPlacementApparatusCatalogId] = useState<ApparatusCatalogId | null>(null);
+  const [pendingStudyDevicePlacement, setPendingStudyDevicePlacement] = useState<StudyPlacementTarget | null>(null);
   const [pendingConnectionOutput, setPendingConnectionOutput] = useState<PendingConnection | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [selectedDuctWaypointId, setSelectedDuctWaypointId] = useState<string | null>(null);
@@ -243,9 +282,13 @@ export function DrawingCanvas() {
   const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(true);
   const [isNomenclatureOpen, setIsNomenclatureOpen] = useState(false);
   const [isValidationOpen, setIsValidationOpen] = useState(false);
+  const [isImportedStudyOpen, setIsImportedStudyOpen] = useState(false);
+  const [isSiteInformationOpen, setIsSiteInformationOpen] = useState(false);
   const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
+  const [isNewProjectConfirmationOpen, setIsNewProjectConfirmationOpen] = useState(false);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
   const [pdfExportError, setPdfExportError] = useState<string | null>(null);
+  const [pendingCdefImport, setPendingCdefImport] = useState<CdefImportResult | null>(null);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -261,6 +304,18 @@ export function DrawingCanvas() {
   const selectedApparatus = project.apparatus.find((apparatus) => apparatus.id === selectedObjectId) ?? null;
   const selectedDuct = project.ducts.find((duct) => duct.id === selectedObjectId) ?? null;
   const selectedBusinessObject = selectedElectricalPanel ?? selectedOctopus ?? selectedApparatus;
+  const visibleOctopuses = useMemo(
+    () => project.octopuses.filter((octopus) => shouldDisplayOctopusForActiveLevel(project, octopus)),
+    [project],
+  );
+  const visibleApparatus = useMemo(
+    () => project.apparatus.filter((apparatus) => shouldDisplayApparatusForActiveLevel(project, apparatus)),
+    [project],
+  );
+  const visibleDucts = useMemo(
+    () => project.ducts.filter((duct) => shouldDisplayDuctForActiveLevel(project, duct)),
+    [project],
+  );
   const nomenclature = useMemo(() => buildProjectNomenclature(project), [project]);
   const validationResult = useMemo(() => validateProject(project), [project]);
   const planImage = useHtmlImage(activePlan?.source ?? null);
@@ -273,7 +328,10 @@ export function DrawingCanvas() {
 
   if (!commandManagerRef.current) {
     commandManagerRef.current = new CommandManager(
-      (nextProject) => setProject(nextProject),
+      (nextProject) => {
+        setProject(nextProject);
+        ProjectStorage.save(nextProject);
+      },
       () => setHistoryRevision((revision) => revision + 1),
     );
   }
@@ -281,6 +339,53 @@ export function DrawingCanvas() {
   const commandManager = commandManagerRef.current;
 
   const viewport = project.drawing.viewport;
+
+  const resetTransientProjectUi = useCallback(() => {
+    lastDragDistance.current = 0;
+    panelDragStart.current = null;
+    octopusDragStart.current = null;
+    apparatusDragStart.current = null;
+    ductWaypointDragStart.current = null;
+    ductControlDragStart.current = null;
+    setActiveTool('pan');
+    setPlacementOctopusModelId(null);
+    setPlacementApparatusCatalogId(null);
+    setPendingStudyDevicePlacement(null);
+    setPendingConnectionOutput(null);
+    setSelectedObjectId(null);
+    setSelectedDuctWaypointId(null);
+    setSelectedDuctControlId(null);
+    setIsDraggingDuctHandle(false);
+    setIsPropertiesPanelOpen(true);
+    setIsNomenclatureOpen(false);
+    setIsValidationOpen(false);
+    setIsImportedStudyOpen(false);
+    setIsSiteInformationOpen(false);
+    setIsPdfExportOpen(false);
+    setPdfExportError(null);
+    setPendingCdefImport(null);
+    setScaleDraft(createEmptyScaleDraft());
+    setMeasureDraft(createEmptyMeasureDraft());
+    setTemporaryMeasurement(null);
+  }, []);
+
+  const createNewProject = useCallback(() => {
+    const nextProject = ProjectStorage.createNew();
+    commandManager.clear();
+    setProject(nextProject);
+    resetTransientProjectUi();
+    setIsNewProjectConfirmationOpen(false);
+    setSaveMessage('Nouveau projet créé');
+  }, [commandManager, resetTransientProjectUi]);
+
+  const requestNewProject = useCallback(() => {
+    if (isProjectNonEmpty(project)) {
+      setIsNewProjectConfirmationOpen(true);
+      return;
+    }
+
+    createNewProject();
+  }, [createNewProject, project]);
 
   const setViewport = useCallback((nextViewport: Viewport) => {
     setProject((current) => ({
@@ -383,11 +488,17 @@ export function DrawingCanvas() {
   useEffect(() => {
     const handleKeyboardShortcut = (event: KeyboardEvent) => {
       const usesModifier = event.metaKey || event.ctrlKey;
-      if (!usesModifier || event.key.toLowerCase() !== 'z') {
+      const key = event.key.toLowerCase();
+      if (!usesModifier || (key !== 'z' && key !== 'n')) {
         return;
       }
 
       event.preventDefault();
+      if (key === 'n') {
+        requestNewProject();
+        return;
+      }
+
       if (event.shiftKey) {
         commandManager.redo();
       } else {
@@ -397,7 +508,7 @@ export function DrawingCanvas() {
 
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
-  }, [commandManager]);
+  }, [commandManager, requestNewProject]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -405,13 +516,19 @@ export function DrawingCanvas() {
         return;
       }
 
+      if (pendingStudyDevicePlacement) {
+        setPendingStudyDevicePlacement(null);
+        setPlacementApparatusCatalogId(null);
+        setPlacementOctopusModelId(null);
+        setActiveTool('pan');
+      }
       setMeasureDraft(createEmptyMeasureDraft());
       setTemporaryMeasurement(null);
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, []);
+  }, [pendingStudyDevicePlacement]);
 
   useEffect(() => {
     const handleDeleteShortcut = (event: KeyboardEvent) => {
@@ -521,6 +638,237 @@ export function DrawingCanvas() {
     },
     [commandManager, containerSize.height, containerSize.width, project],
   );
+
+  const importConfiguratorProject = useCallback(
+    async (file: File) => {
+      try {
+        const parsed = await readJsonFile(file);
+        setPendingCdefImport(importCdefProject(parsed, project));
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Import configurateur impossible.');
+      }
+    },
+    [project],
+  );
+
+  const applyPendingCdefImport = useCallback(() => {
+    if (!pendingCdefImport) {
+      return;
+    }
+
+    commandManager.execute(
+      new ProjectSnapshotCommand(
+        'Importer un projet configurateur',
+        project,
+        pendingCdefImport.project,
+        commandManager.setProject.bind(commandManager),
+      ),
+    );
+    ProjectStorage.save(pendingCdefImport.project);
+    setProject(pendingCdefImport.project);
+    resetTransientProjectUi();
+    if ((pendingCdefImport.project.study?.levels.length ?? 0) > 0) {
+      setIsImportedStudyOpen(true);
+    }
+    setSaveMessage(
+      pendingCdefImport.warnings.length > 0
+        ? `Import réussi avec ${pendingCdefImport.warnings.length} avertissement${pendingCdefImport.warnings.length > 1 ? 's' : ''}`
+        : 'Import configurateur réussi',
+    );
+  }, [commandManager, pendingCdefImport, project, resetTransientProjectUi]);
+
+  const changeActiveLevel = useCallback((levelId: string) => {
+    setProject((currentProject) => {
+      const nextProject = {
+        ...currentProject,
+        activeLevelId: levelId,
+      };
+      ProjectStorage.save(nextProject);
+      return nextProject;
+    });
+    setSelectedObjectId(null);
+    setSelectedDuctWaypointId(null);
+    setSelectedDuctControlId(null);
+  }, []);
+
+  const selectStudyTarget = useCallback((target: StudyPlacementTarget) => {
+    const drawingObjectId = target.drawingObjectId;
+    if (drawingObjectId) {
+      const apparatus = project.apparatus.find((item) => item.id === drawingObjectId);
+      const octopus = project.octopuses.find((item) => item.id === drawingObjectId);
+      const location = apparatus ?? octopus;
+      if (!location) {
+        return;
+      }
+
+      setPendingStudyDevicePlacement(null);
+      setSelectedObjectId(location.id);
+      setSelectedDuctWaypointId(null);
+      setSelectedDuctControlId(null);
+      setIsPropertiesPanelOpen(true);
+      centerViewportOnPoint({ x: location.x, y: location.y });
+      return;
+    }
+
+    if (target.drawingCatalogId) {
+      lastDragDistance.current = 0;
+      setPendingStudyDevicePlacement(target);
+      setSelectedObjectId(null);
+      setSelectedDuctWaypointId(null);
+      setSelectedDuctControlId(null);
+      setIsPropertiesPanelOpen(true);
+      setActiveTool('place-apparatus');
+      setPlacementApparatusCatalogId(target.drawingCatalogId);
+      setPlacementOctopusModelId(null);
+      setPendingConnectionOutput(null);
+      setScaleDraft(createEmptyScaleDraft());
+      setMeasureDraft(createEmptyMeasureDraft());
+      setTemporaryMeasurement(null);
+      return;
+    }
+
+    const device = project.study?.devices.find((candidate) => candidate.id === target.studyDeviceIds[0]);
+    if (device?.type === 'octopus' && device.modelId) {
+      lastDragDistance.current = 0;
+      setPendingStudyDevicePlacement(target);
+      setSelectedObjectId(null);
+      setSelectedDuctWaypointId(null);
+      setSelectedDuctControlId(null);
+      setIsPropertiesPanelOpen(true);
+      setActiveTool('place-octopus');
+      setPlacementOctopusModelId(device.modelId as OctopusModelId);
+      setPlacementApparatusCatalogId(null);
+      setPendingConnectionOutput(null);
+      setScaleDraft(createEmptyScaleDraft());
+      setMeasureDraft(createEmptyMeasureDraft());
+      setTemporaryMeasurement(null);
+      return;
+    }
+
+    setPendingStudyDevicePlacement(null);
+    setSelectedDuctWaypointId(null);
+    setSelectedDuctControlId(null);
+  }, [centerViewportOnPoint, project.apparatus, project.octopuses, project.study?.devices]);
+
+  const configureStudyRepresentation = useCallback((studyDeviceIds: string[], drawingCatalogId: ApparatusCatalogId) => {
+    try {
+      commandManager.execute(
+        createConfigureStudyRepresentationCommand(
+          project,
+          studyDeviceIds,
+          drawingCatalogId,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Impossible de choisir cet appareillage.");
+    }
+  }, [commandManager, project]);
+
+  const dissociateStudyGroup = useCallback((physicalGroupId: string) => {
+    try {
+      commandManager.execute(
+        createDissociateStudyGroupCommand(
+          project,
+          physicalGroupId,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+      if (pendingStudyDevicePlacement?.id === physicalGroupId) {
+        setPendingStudyDevicePlacement(null);
+        setActiveTool('pan');
+        setPlacementApparatusCatalogId(null);
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Impossible de dissocier cet appareillage.");
+    }
+  }, [commandManager, pendingStudyDevicePlacement?.id, project]);
+
+  const setStudyOctopusInstallation = useCallback((
+    octopusId: string,
+    installationLevelId: string | undefined,
+    installationRoomId: string | undefined,
+  ) => {
+    try {
+      commandManager.execute(
+        createSetStudyOctopusInstallationCommand(
+          project,
+          octopusId,
+          installationLevelId,
+          installationRoomId,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Impossible de définir l'installation.");
+    }
+  }, [commandManager, project]);
+
+  const setStudyOctopusServedRooms = useCallback((octopusId: string, servedRoomIds: string[]) => {
+    try {
+      commandManager.execute(
+        createSetStudyOctopusServedRoomsCommand(
+          project,
+          octopusId,
+          servedRoomIds,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Impossible de modifier les pièces desservies.');
+    }
+  }, [commandManager, project]);
+
+  const assignStudyDeviceToOctopusPort = useCallback((octopusId: string, portNumber: number, studyDeviceId: string) => {
+    try {
+      commandManager.execute(
+        createAssignStudyDeviceToOctopusPortCommand(
+          project,
+          octopusId,
+          portNumber,
+          studyDeviceId,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Impossible d’affecter cette sortie.');
+    }
+  }, [commandManager, project]);
+
+  const unassignStudyDeviceFromOctopusPort = useCallback((octopusId: string, portNumber: number) => {
+    try {
+      commandManager.execute(
+        createUnassignOctopusPortCommand(
+          project,
+          octopusId,
+          portNumber,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Impossible de libérer cette sortie.');
+    }
+  }, [commandManager, project]);
+
+  const moveStudyDeviceOctopusPortAssignment = useCallback((
+    studyDeviceId: string,
+    toOctopusId: string,
+    toPortNumber: number,
+  ) => {
+    try {
+      commandManager.execute(
+        createMoveStudyDeviceOctopusPortAssignmentCommand(
+          project,
+          studyDeviceId,
+          toOctopusId,
+          toPortNumber,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Impossible de déplacer cette affectation.');
+    }
+  }, [commandManager, project]);
 
   const updateActivePlan = useCallback(
     (
@@ -658,18 +1006,26 @@ export function DrawingCanvas() {
         return;
       }
 
-      const octopus = createOctopus(placementOctopusModelId, worldPosition, project.octopuses);
+      const octopusDraft = createOctopus(placementOctopusModelId, worldPosition, project.octopuses);
+      const pendingOctopusDevice = pendingStudyDevicePlacement
+        ? project.study?.devices.find((device) => device.id === pendingStudyDevicePlacement.studyDeviceIds[0])
+        : undefined;
+      const octopus = pendingOctopusDevice?.type === 'octopus'
+        ? { ...octopusDraft, name: pendingOctopusDevice.identifier ?? octopusDraft.name }
+        : octopusDraft;
       commandManager.execute(
         createAddOctopusCommand(
           project,
           octopus,
           commandManager.setProject.bind(commandManager),
+          pendingStudyDevicePlacement?.studyDeviceIds ?? [],
         ),
       );
       setSelectedObjectId(octopus.id);
       setIsPropertiesPanelOpen(true);
       setActiveTool('pan');
       setPlacementOctopusModelId(null);
+      setPendingStudyDevicePlacement(null);
       return;
     }
 
@@ -681,22 +1037,31 @@ export function DrawingCanvas() {
         return;
       }
 
-      const apparatus = createApparatusInstance(
+      const apparatusDraft = createApparatusInstance(
         placementApparatusCatalogId,
         worldPosition,
         project.apparatus,
       );
+      const apparatus = pendingStudyDevicePlacement
+        ? {
+            ...apparatusDraft,
+            identifier: pendingStudyDevicePlacement.identifiers.join(' + ') || apparatusDraft.identifier,
+            studyDeviceIds: pendingStudyDevicePlacement.studyDeviceIds,
+          }
+        : apparatusDraft;
       commandManager.execute(
         createAddApparatusCommand(
           project,
           apparatus,
           commandManager.setProject.bind(commandManager),
+          pendingStudyDevicePlacement?.studyDeviceIds ?? [],
         ),
       );
       setSelectedObjectId(apparatus.id);
       setIsPropertiesPanelOpen(true);
       setActiveTool('pan');
       setPlacementApparatusCatalogId(null);
+      setPendingStudyDevicePlacement(null);
       return;
     }
 
@@ -742,6 +1107,7 @@ export function DrawingCanvas() {
     project.apparatus,
     project.octopuses,
     pendingConnectionOutput,
+    pendingStudyDevicePlacement,
     placementApparatusCatalogId,
     placementOctopusModelId,
     scaleDraft.start,
@@ -1201,6 +1567,20 @@ export function DrawingCanvas() {
     [project],
   );
 
+  const updateProjectMetadata = useCallback(
+    (site: SiteInformation, status: ProjectStatus) => {
+      commandManager.execute(
+        createUpdateProjectMetadataCommand(
+          project,
+          { site, status },
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+      setIsSiteInformationOpen(false);
+    },
+    [commandManager, project],
+  );
+
   return (
     <div className="app-shell">
       <Toolbar
@@ -1218,7 +1598,10 @@ export function DrawingCanvas() {
         hasScaleReference={project.drawing.scaleReference !== null}
         scaleMarkerVisible={project.drawing.scaleMarkerVisible}
         layers={getProjectLayers(project)}
+        studyLevels={project.study?.levels ?? []}
+        activeLevelId={project.activeLevelId}
         onImportPlan={importPlan}
+        onImportConfiguratorProject={importConfiguratorProject}
         onFitToScreen={() => fitPlanToScreen()}
         onToggleWheelZoom={() => updateDrawingState({ zoomWheelEnabled: !project.drawing.zoomWheelEnabled })}
         onToggleMovementLocked={() => updateDrawingState({ movementLocked: !project.drawing.movementLocked })}
@@ -1231,12 +1614,16 @@ export function DrawingCanvas() {
           ProjectStorage.save(project);
           setSaveMessage('Projet sauvegardé');
         }}
+        onOpenSiteInformation={() => setIsSiteInformationOpen(true)}
         onOpenNomenclature={() => setIsNomenclatureOpen(true)}
         onOpenValidation={() => setIsValidationOpen(true)}
+        onOpenImportedStudy={() => setIsImportedStudyOpen(true)}
         onOpenPdfExport={() => {
           setPdfExportError(null);
           setIsPdfExportOpen(true);
         }}
+        onNewProject={requestNewProject}
+        onChangeActiveLevel={changeActiveLevel}
         onUndo={() => commandManager.undo()}
         onRedo={() => commandManager.redo()}
         onStartElectricalPanelPlacement={() => {
@@ -1251,6 +1638,7 @@ export function DrawingCanvas() {
           setActiveTool('place-electrical-panel');
           setPlacementApparatusCatalogId(null);
           setPlacementOctopusModelId(null);
+          setPendingStudyDevicePlacement(null);
           setPendingConnectionOutput(null);
           setScaleDraft(createEmptyScaleDraft());
           setMeasureDraft(createEmptyMeasureDraft());
@@ -1268,6 +1656,7 @@ export function DrawingCanvas() {
           setActiveTool('place-octopus');
           setPlacementOctopusModelId(modelId);
           setPlacementApparatusCatalogId(null);
+          setPendingStudyDevicePlacement(null);
           setPendingConnectionOutput(null);
           setScaleDraft(createEmptyScaleDraft());
           setMeasureDraft(createEmptyMeasureDraft());
@@ -1285,6 +1674,7 @@ export function DrawingCanvas() {
           setActiveTool('place-apparatus');
           setPlacementApparatusCatalogId(catalogId);
           setPlacementOctopusModelId(null);
+          setPendingStudyDevicePlacement(null);
           setPendingConnectionOutput(null);
           setScaleDraft(createEmptyScaleDraft());
           setMeasureDraft(createEmptyMeasureDraft());
@@ -1299,6 +1689,7 @@ export function DrawingCanvas() {
           setActiveTool(tool);
           setPlacementOctopusModelId(null);
           setPlacementApparatusCatalogId(null);
+          setPendingStudyDevicePlacement(null);
           setPendingConnectionOutput(null);
           setScaleDraft(createEmptyScaleDraft());
           setMeasureDraft(createEmptyMeasureDraft());
@@ -1364,6 +1755,12 @@ export function DrawingCanvas() {
               : pendingConnectionOutput.targetType === 'electrical-panel'
               ? `Sélectionnez le tableau électrique à connecter à la sortie ${pendingConnectionOutput.outputNumber}`
               : `Sélectionnez l’appareillage à connecter à la sortie ${pendingConnectionOutput.outputNumber}`}
+          </div>
+        )}
+
+        {pendingStudyDevicePlacement && (
+          <div className="connection-hint" role="status">
+            Cliquez sur le plan pour placer {pendingStudyDevicePlacement.identifiers.join(' + ')}
           </div>
         )}
 
@@ -1472,7 +1869,7 @@ export function DrawingCanvas() {
           </Layer>
 
           <Layer>
-            {project.ducts.map((duct) => (
+            {visibleDucts.map((duct) => (
               <DuctNode
                 key={duct.id}
                 duct={duct}
@@ -1573,7 +1970,7 @@ export function DrawingCanvas() {
           </Layer>
 
           <Layer>
-            {project.octopuses.map((octopus) => (
+            {visibleOctopuses.map((octopus) => (
               <OctopusNode
                 key={octopus.id}
                 octopus={octopus}
@@ -1616,7 +2013,7 @@ export function DrawingCanvas() {
                 }}
               />
             ))}
-            {project.apparatus.map((apparatus) => {
+            {visibleApparatus.map((apparatus) => {
               const pendingOctopus = pendingConnectionOutput?.kind === 'octopus-output'
                 ? project.octopuses.find((octopus) => octopus.id === pendingConnectionOutput.octopusId)
                 : null;
@@ -1751,6 +2148,7 @@ export function DrawingCanvas() {
           apparatus={project.apparatus}
           electricalPanel={project.electricalPanel}
           ducts={project.ducts}
+          study={project.study}
           metersPerPixel={project.drawing.metersPerPixel}
           pendingConnectionOutput={pendingConnectionOutput}
           onClose={() => setIsPropertiesPanelOpen(false)}
@@ -1760,6 +2158,11 @@ export function DrawingCanvas() {
           onUpdateOctopusOutputOverride={updateOctopusOutputOverride}
           onResetOctopusOutputOverride={resetOctopusOutputOverride}
           onDeleteOctopus={deleteOctopus}
+          onSetStudyOctopusInstallation={setStudyOctopusInstallation}
+          onSetStudyOctopusServedRooms={setStudyOctopusServedRooms}
+          onAssignStudyDeviceToOctopusPort={assignStudyDeviceToOctopusPort}
+          onUnassignOctopusPort={unassignStudyDeviceFromOctopusPort}
+          onMoveStudyDeviceOctopusPortAssignment={moveStudyDeviceOctopusPortAssignment}
           onUpdateApparatus={updateApparatus}
           onDeleteApparatus={deleteApparatus}
           onStartConnection={startConnection}
@@ -1786,6 +2189,27 @@ export function DrawingCanvas() {
           />
         )}
 
+        {isImportedStudyOpen && project.study && (
+          <ImportedStudyPanel
+            study={project.study}
+            octopuses={project.octopuses}
+            activeLevelId={project.activeLevelId}
+            pendingPlacementDeviceId={pendingStudyDevicePlacement?.id}
+            onClose={() => setIsImportedStudyOpen(false)}
+            onSelectTarget={selectStudyTarget}
+            onConfigureRepresentation={configureStudyRepresentation}
+            onDissociateGroup={dissociateStudyGroup}
+          />
+        )}
+
+        {isSiteInformationOpen && (
+          <SiteInformationPanel
+            project={project}
+            onClose={() => setIsSiteInformationOpen(false)}
+            onSave={updateProjectMetadata}
+          />
+        )}
+
         <PdfExportDialog
           isOpen={isPdfExportOpen}
           isGenerating={isPdfGenerating}
@@ -1797,7 +2221,171 @@ export function DrawingCanvas() {
           }}
           onExport={handlePdfExport}
         />
+
+        {pendingCdefImport && (
+          <CdefImportDialog
+            importResult={pendingCdefImport}
+            replacingExistingProject={isProjectNonEmpty(project)}
+            onCancel={() => setPendingCdefImport(null)}
+            onImport={applyPendingCdefImport}
+          />
+        )}
+
+        {isNewProjectConfirmationOpen && (
+          <NewProjectDialog
+            onCancel={() => setIsNewProjectConfirmationOpen(false)}
+            onCreate={createNewProject}
+          />
+        )}
       </main>
+    </div>
+  );
+}
+
+function isProjectNonEmpty(project: CpreyDrawProject): boolean {
+  return (
+    project.plans.length > 0 ||
+    project.octopuses.length > 0 ||
+    project.apparatus.length > 0 ||
+    project.ducts.length > 0 ||
+    project.electricalPanel !== undefined ||
+    hasSiteInformation(project) ||
+    project.origin.type === 'configurator' ||
+    project.octopuses.some((octopus) => octopus.importContext?.source === 'CDEF') ||
+    project.apparatus.some((apparatus) => apparatus.importContext?.source === 'CDEF')
+  );
+}
+
+function hasSiteInformation(project: CpreyDrawProject): boolean {
+  return Object.values(project.site).some((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
+function NewProjectDialog({
+  onCancel,
+  onCreate,
+}: {
+  onCancel: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="new-project-dialog" role="dialog" aria-modal="true" aria-labelledby="new-project-title">
+        <header>
+          <h2 id="new-project-title">Nouveau projet</h2>
+        </header>
+        <p>
+          Le projet courant contient des données.
+          <br />
+          Créer un nouveau projet supprimera les modifications non sauvegardées de la session courante.
+        </p>
+        <footer>
+          <button type="button" className="secondary-action" onClick={onCancel}>
+            Annuler
+          </button>
+          <button type="button" className="primary-action" onClick={onCreate}>
+            Nouveau projet
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function CdefImportDialog({
+  importResult,
+  replacingExistingProject,
+  onCancel,
+  onImport,
+}: {
+  importResult: CdefImportResult;
+  replacingExistingProject: boolean;
+  onCancel: () => void;
+  onImport: () => void;
+}) {
+  const { summary, warnings } = importResult;
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="cdef-import-dialog" role="dialog" aria-modal="true" aria-labelledby="cdef-import-title">
+        <header>
+          <div>
+            <h2 id="cdef-import-title">Importer depuis un configurateur</h2>
+            <p>{summary.projectName}</p>
+          </div>
+          <button type="button" className="panel-close-button" onClick={onCancel} aria-label="Fermer">
+            ×
+          </button>
+        </header>
+
+        {replacingExistingProject && (
+          <div className="import-warning">
+            Le projet ouvert contient déjà des éléments. L’import remplacera les pieuvres, appareillages et gaines,
+            tout en conservant le plan et les réglages de dessin existants.
+          </div>
+        )}
+
+        <div className="import-summary-grid">
+          <SummaryRow label="Projet" value={summary.projectName} />
+          <SummaryRow
+            label="Origine"
+            value={[summary.sourceApplication, summary.sourceVariant].filter(Boolean).join(' / ') || 'Non renseignée'}
+          />
+          <SummaryRow label="Scénario" value={summary.selectedScenario} />
+          <SummaryRow label="Niveaux" value={String(summary.levelsCount)} />
+          <SummaryRow label="Pièces" value={String(summary.roomsCount)} />
+        </div>
+
+        <section className="import-summary-section">
+          <h3>Pieuvres</h3>
+          <ul>
+            <li>Cuisine : {summary.pieuvres.kitchen}</li>
+            <li>Bain : {summary.pieuvres.bath}</li>
+            <li>Confort : {summary.pieuvres.comfort}</li>
+            <li>Autre : {summary.pieuvres.other}</li>
+            <li>Total : {summary.pieuvres.total}</li>
+          </ul>
+        </section>
+
+        <section className="import-summary-section">
+          <h3>Appareillages</h3>
+          <ul>
+            {summary.apparatus.map((item) => (
+              <li key={item.metricKey}>
+                {item.label} : {item.quantity}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {warnings.length > 0 && (
+          <section className="import-summary-section">
+            <h3>Warnings</h3>
+            <ul>
+              {warnings.map((warning, index) => (
+                <li key={`${warning.code}-${index}`}>{warning.message}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <footer>
+          <button type="button" className="secondary-action" onClick={onCancel}>
+            Annuler
+          </button>
+          <button type="button" className="primary-action" onClick={onImport}>
+            Importer
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

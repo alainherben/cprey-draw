@@ -96,6 +96,24 @@ test('groups octopuses, apparatus by catalog and apparatus by type', () => {
   assert.equal(nomenclature.apparatus.byType.find((item) => item.key === 'DR')?.count, 1);
 });
 
+test('counts v2 switch physical apparatus by chosen catalog model', () => {
+  const simpleSwitch = createApparatusInstance('interrupteur-v&v', { x: 100, y: 100 }, []);
+  const doubleSwitch = {
+    ...createApparatusInstance('Interrupteur-double-vV', { x: 120, y: 100 }, [simpleSwitch]),
+    studyDeviceIds: ['device_001', 'device_002'],
+  };
+
+  const nomenclature = buildProjectNomenclature({
+    ...createEmptyProject(),
+    apparatus: [simpleSwitch, doubleSwitch],
+  });
+
+  assert.equal(nomenclature.apparatus.byCatalog.find((item) => item.key === 'interrupteur-v&v')?.count, 1);
+  assert.equal(nomenclature.apparatus.byCatalog.find((item) => item.key === 'Interrupteur-double-vV')?.count, 1);
+  assert.equal(nomenclature.apparatus.byType.find((item) => item.key === 'IN')?.count, 2);
+  assert.equal(nomenclature.summary.apparatusCount, 2);
+});
+
 test('includes customized outputs, reserves and white caps without mutating the catalog', () => {
   const nomenclature = buildProjectNomenclature(createBomProject());
   const kitchen = nomenclature.octopuses.details.find((detail) => detail.name === 'Cuisine 01');

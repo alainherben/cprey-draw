@@ -38,6 +38,12 @@ test('connected state maps to black when false and green when true', () => {
   assert.equal(APPARATUS_ICON_FILENAMES.prise_double.green, 'Prise_double_Vert.svg');
   assert.equal(APPARATUS_ICON_FILENAMES.prise_double_haute.black, 'Prise_double_Haute_Noir.svg');
   assert.equal(APPARATUS_ICON_FILENAMES.prise_double_haute.green, 'Prise_double_Haute_Vert.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['interrupteur-poussoir'].black, 'InterrupteurPoussoir_Noir.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['interrupteur-simple'].black, 'InterrupteurSimple_Noir.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['interrupteur-v&v'].black, 'InterrupteurVa&Vient_Noir.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['interrupteur-double'].black, 'InterrupteurDoubleS_Noir.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['Interrupteur-double-v'].black, 'InterrupteurDoubleV_Noir.svg');
+  assert.equal(APPARATUS_ICON_FILENAMES['Interrupteur-double-vV'].black, 'InterrupteurDoubleVV_Noir.svg');
 });
 
 test('finds all official black and green apparatus assets', () => {
