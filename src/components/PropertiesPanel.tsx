@@ -8,7 +8,6 @@ import {
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import {
   calculateDuctLengthStatus,
-  calculateDuctUsedLengthMeters,
   getCircuitExpectedApparatusType,
   getApparatusCircuitContext,
   getDuctPathPoints,
@@ -17,12 +16,19 @@ import {
   isPowerSupplyOutputDestination,
   LINK_COLOR_CSS,
 } from '../domain/ducts';
+import {
+  calculateDuctLengthBreakdownFromPoints,
+  getDuctRouteMode,
+} from '../domain/technicalSettings';
 import { OCTOPUS_MODELS } from '../domain/octopus';
 import {
   getOctopusPortAssignments,
+  getStudyOctopusInstallationHeight,
+  getStudyOctopusInstallationMode,
   getStudyDevicePortAssignment,
   getStudyDevicesForDrawingObject,
   getStudyOctopus,
+  parseMetricInput,
 } from '../domain/importedStudy';
 import {
   CONFIGURABLE_OUTPUT_TYPES,
@@ -37,12 +43,15 @@ import {
 import type {
   ApparatusInstance,
   ConnectionTargetType,
+  CpreyDrawProject,
   Duct,
   DuctConductor,
   DuctEndpoint,
+  DuctRouteMode,
   DuctSpecification,
   ElectricalPanel,
   ImportedStudy,
+  OctopusInstallationMode,
   Octopus,
   OctopusOutputOverride,
   StudyDevice,
@@ -84,6 +93,7 @@ type ApparatusUpdates = Partial<
 >;
 
 interface PropertiesPanelProps {
+  project: CpreyDrawProject;
   selectedObject: SelectedBusinessObject | null;
   selectedDuct: Duct | null;
   selectedDuctControlId: string | null;
@@ -109,6 +119,11 @@ interface PropertiesPanelProps {
     installationLevelId: string | undefined,
     installationRoomId: string | undefined,
   ) => void;
+  onSetStudyOctopusMounting: (
+    octopusId: string,
+    installationMode: OctopusInstallationMode,
+    installationHeightM: number | undefined,
+  ) => void;
   onSetStudyOctopusServedRooms: (octopusId: string, servedRoomIds: string[]) => void;
   onAssignStudyDeviceToOctopusPort: (octopusId: string, portNumber: number, studyDeviceId: string) => void;
   onUnassignOctopusPort: (octopusId: string, portNumber: number) => void;
@@ -116,6 +131,11 @@ interface PropertiesPanelProps {
     studyDeviceId: string,
     toOctopusId: string,
     toPortNumber: number,
+  ) => void;
+  onSetManualApparatusLocation: (
+    apparatusId: string,
+    levelId: string | undefined,
+    roomId: string | undefined,
   ) => void;
   onUpdateApparatus: (apparatusId: string, updates: ApparatusUpdates, label?: string) => void;
   onDeleteApparatus: (apparatusId: string) => void;
@@ -125,6 +145,7 @@ interface PropertiesPanelProps {
   onAddDuctWaypoint: (ductId: string) => void;
   onResetDuctControl: (ductId: string, controlId: string) => void;
   onUpdateDuctSpecification: (ductId: string, specification: DuctSpecification) => void;
+  onUpdateDuctRouteMode: (ductId: string, routeMode: DuctRouteMode) => void;
   onDeleteDuct: (ductId: string) => void;
 }
 
@@ -193,6 +214,10 @@ function formatLengthMeters(value: number): string {
   return `${value.toFixed(2).replace('.', ',')} m`;
 }
 
+function formatMeterDraft(value: number | undefined): string {
+  return typeof value === 'number' ? value.toFixed(2).replace('.', ',') : '';
+}
+
 function outputStateLabel(output: EffectiveOctopusOutput): string {
   if (output.state === 'custom') {
     return 'Personnalisée';
@@ -248,6 +273,17 @@ function endpointLabel(
   }
 
   return electricalPanel?.id === endpoint.id ? electricalPanel.name : 'Tableau introuvable';
+}
+
+function formatEndpointCorrectionLabel(prefix: string, endpoint: DuctEndpoint): string {
+  if (endpoint.type === 'electrical-panel') {
+    return `${prefix} · correction tableau`;
+  }
+  if (endpoint.type === 'apparatus') {
+    return `${prefix} · correction appareillage`;
+  }
+
+  return `${prefix} · correction pieuvre`;
 }
 
 function OutputDetail({ output }: { output: EffectiveOctopusOutput }) {
@@ -322,6 +358,7 @@ function OutputDetail({ output }: { output: EffectiveOctopusOutput }) {
 }
 
 export function PropertiesPanel({
+  project,
   selectedObject,
   selectedDuct,
   selectedDuctControlId,
@@ -340,10 +377,12 @@ export function PropertiesPanel({
   onResetOctopusOutputOverride,
   onDeleteOctopus,
   onSetStudyOctopusInstallation,
+  onSetStudyOctopusMounting,
   onSetStudyOctopusServedRooms,
   onAssignStudyDeviceToOctopusPort,
   onUnassignOctopusPort,
   onMoveStudyDeviceOctopusPortAssignment,
+  onSetManualApparatusLocation,
   onUpdateApparatus,
   onDeleteApparatus,
   onStartConnection,
@@ -352,6 +391,7 @@ export function PropertiesPanel({
   onAddDuctWaypoint,
   onResetDuctControl,
   onUpdateDuctSpecification,
+  onUpdateDuctRouteMode,
   onDeleteDuct,
 }: PropertiesPanelProps) {
   const [draftName, setDraftName] = useState('');
@@ -370,6 +410,8 @@ export function PropertiesPanel({
   const [ductConductorDrafts, setDuctConductorDrafts] = useState<DuctConductor[]>([]);
   const [ductSpecificationError, setDuctSpecificationError] = useState('');
   const [studyOctopusError, setStudyOctopusError] = useState('');
+  const [octopusMountingModeDraft, setOctopusMountingModeDraft] = useState<OctopusInstallationMode>('standard');
+  const [octopusMountingHeightDraft, setOctopusMountingHeightDraft] = useState('');
 
   useEffect(() => {
     setDraftName(selectedObject?.name ?? '');
@@ -420,6 +462,19 @@ export function PropertiesPanel({
     selectedDuct?.specification.conductors,
   ]);
 
+  useEffect(() => {
+    if (selectedObject?.type !== 'octopus') {
+      setOctopusMountingModeDraft('standard');
+      setOctopusMountingHeightDraft('');
+      return;
+    }
+
+    const mode = getStudyOctopusInstallationMode(study, selectedObject.id);
+    const height = getStudyOctopusInstallationHeight(study, selectedObject.id);
+    setOctopusMountingModeDraft(mode);
+    setOctopusMountingHeightDraft(formatMeterDraft(height));
+  }, [selectedObject?.id, selectedObject?.type, study]);
+
   if (!selectedObject && !selectedDuct) {
     return null;
   }
@@ -432,11 +487,13 @@ export function PropertiesPanel({
         ? endpointLabel(selectedDuct.circuitOrigin, octopuses, apparatus, electricalPanel)
         : endpointLabel({ type: 'electrical-panel', id: selectedDuct.circuitOrigin.id }, octopuses, apparatus, electricalPanel);
     const ductPathPoints = getDuctPathPoints(selectedDuct, octopuses, apparatus, electricalPanel, metersPerPixel);
-    const usedLengthMeters = calculateDuctUsedLengthMeters(ductPathPoints, metersPerPixel, selectedDuct.controls);
+    const lengthBreakdown = calculateDuctLengthBreakdownFromPoints(project, selectedDuct, ductPathPoints, selectedDuct.controls);
+    const usedLengthMeters = lengthBreakdown.total;
     const lengthStatus = calculateDuctLengthStatus(
       selectedDuct.specification.availableLengthMeters,
       usedLengthMeters,
     );
+    const routeMode = getDuctRouteMode(selectedDuct);
     const saveDirectDuctSpecification = () => {
       const diameterMm = Number(ductDiameterDraft);
       const availableLengthMeters = Number(ductAvailableLengthDraft);
@@ -545,6 +602,30 @@ export function PropertiesPanel({
             <span>Longueur utilisée</span>
             <strong>{usedLengthMeters === null ? 'Échelle requise' : formatLengthMeters(usedLengthMeters)}</strong>
           </div>
+          <div>
+            <span>Longueur plan</span>
+            <strong>{lengthBreakdown.geometricLength === null ? 'Échelle requise' : formatLengthMeters(lengthBreakdown.geometricLength)}</strong>
+          </div>
+          <div>
+            <span>{formatEndpointCorrectionLabel('De', selectedDuct.source)}</span>
+            <strong>{formatLengthMeters(lengthBreakdown.startVerticalAdjustment)}</strong>
+          </div>
+          <div>
+            <span>{formatEndpointCorrectionLabel('Vers', selectedDuct.target)}</span>
+            <strong>{formatLengthMeters(lengthBreakdown.endVerticalAdjustment)}</strong>
+          </div>
+          <div>
+            <span>Correction verticale totale</span>
+            <strong>{formatLengthMeters(lengthBreakdown.verticalAdjustment)}</strong>
+          </div>
+          <div>
+            <span>Marge raccordement</span>
+            <strong>{formatLengthMeters(lengthBreakdown.connectionMargin)}</strong>
+          </div>
+          <div>
+            <span>Vide sanitaire</span>
+            <strong>{formatLengthMeters(lengthBreakdown.crawlSpaceAdjustment)}</strong>
+          </div>
           {selectedDuct.specification.availableLengthMeters > 0 && (
             <div>
               <span>{lengthStatus.hasOverrun ? 'DÉPASSEMENT' : 'Longueur restante'}</span>
@@ -573,6 +654,33 @@ export function PropertiesPanel({
             <span>Points intermédiaires</span>
             <strong>{selectedDuct.waypoints.length}</strong>
           </div>
+        </div>
+
+        <div className="duct-specification-editor">
+          <h5>Mode de passage</h5>
+          <label className="property-field">
+            <span>Mode</span>
+            <select
+              value={routeMode}
+              disabled={selectedDuct.locked}
+              onChange={(event) => onUpdateDuctRouteMode(selectedDuct.id, event.currentTarget.value as DuctRouteMode)}
+            >
+              <option value="standard">Standard</option>
+              <option value="crawl-space">Vide sanitaire</option>
+            </select>
+          </label>
+          {routeMode === 'crawl-space' && (
+            <div className="readonly-properties single compact">
+              <div>
+                <span>Hauteur vide sanitaire</span>
+                <strong>{formatLengthMeters(project.technicalSettings.crawlSpaceHeight)}</strong>
+              </div>
+              <div>
+                <span>Supplément vertical</span>
+                <strong>{formatLengthMeters(lengthBreakdown.crawlSpaceAdjustment)}</strong>
+              </div>
+            </div>
+          )}
         </div>
 
         <button
@@ -909,35 +1017,7 @@ export function PropertiesPanel({
       : undefined;
   const apparatusCircuitContext =
     selectedObject.type === 'apparatus'
-      ? getApparatusCircuitContext(
-          {
-            schemaVersion: 1,
-            project: { id: '', name: '', updatedAt: '' },
-            site: {},
-            origin: { type: 'manual' },
-            status: 'draft',
-            ownership: {},
-            access: {},
-            audit: { createdAt: '', updatedAt: '' },
-            drawing: {
-              viewport: { x: 0, y: 0, scale: 1 },
-              metersPerPixel,
-              scaleReference: null,
-              scaleMarkerVisible: true,
-              zoomWheelEnabled: true,
-              movementLocked: false,
-              showDuctLengths: true,
-              apparatusGlobalScale: 1,
-            },
-            plans: [],
-            electricalPanel,
-            octopuses,
-            apparatus,
-            ducts,
-            layers: [],
-          },
-          selectedObject.id,
-        )
+      ? getApparatusCircuitContext(project, selectedObject.id)
       : null;
   const hasOutgoingApparatusDuct =
     selectedObject.type === 'apparatus'
@@ -952,6 +1032,15 @@ export function PropertiesPanel({
   const sourceStudyRoom = sourceStudyLevel && sourceStudyDevices[0]?.roomId
     ? sourceStudyLevel.rooms.find((room) => room.id === sourceStudyDevices[0].roomId)
     : undefined;
+  const manualApparatusLevelId = selectedObject.type === 'apparatus' && sourceStudyDevices.length === 0
+    ? selectedObject.levelId
+    : undefined;
+  const manualApparatusRoomId = selectedObject.type === 'apparatus' && sourceStudyDevices.length === 0
+    ? selectedObject.roomId
+    : undefined;
+  const manualApparatusRooms = manualApparatusLevelId
+    ? study?.levels.find((level) => level.id === manualApparatusLevelId)?.rooms ?? []
+    : [];
   const allStudyRooms = study?.levels.flatMap((level) => level.rooms) ?? [];
   const selectedStudyOctopus = selectedObject.type === 'octopus'
     ? getStudyOctopus(study, selectedObject.id)
@@ -976,6 +1065,8 @@ export function PropertiesPanel({
   ) ?? [];
   const roomById = new Map(allStudyRooms.map((room) => [room.id, room]));
   const assignmentByPort = new Map(selectedOctopusAssignments.map((assignment) => [assignment.portNumber, assignment]));
+  const parsedMountingHeight = parseMetricInput(octopusMountingHeightDraft);
+  const isWallMountingHeightValid = typeof parsedMountingHeight === 'number' && parsedMountingHeight > 0;
 
   const runStudyOctopusAction = (action: () => void) => {
     try {
@@ -1033,9 +1124,9 @@ export function PropertiesPanel({
         </div>
       )}
 
-      {selectedObject.type === 'octopus' && study && (
+      {selectedObject.type === 'octopus' && (
         <section className="property-section study-octopus-section">
-          <h3>Étude pieuvre</h3>
+          <h3>Installation</h3>
           {studyOctopusError && <p className="property-error">{studyOctopusError}</p>}
 
           <label className="property-field">
@@ -1050,7 +1141,7 @@ export function PropertiesPanel({
               }}
             >
               <option value="">Non défini</option>
-              {study.levels.map((level) => (
+              {(study?.levels ?? []).map((level) => (
                 <option key={level.id} value={level.id}>
                   {level.code ? `${level.code} : ${level.name}` : level.name}
                 </option>
@@ -1077,11 +1168,68 @@ export function PropertiesPanel({
               <option value="">Non définie</option>
               {selectedInstallationRooms.map((room) => (
                 <option key={room.id} value={room.id}>
-                  {formatStudyRoomLabel(study, room)}
+                  {study ? formatStudyRoomLabel(study, room) : room.name}
                 </option>
               ))}
             </select>
           </label>
+
+          <label className="property-field">
+            <span>Mode d'installation</span>
+            <select
+              value={octopusMountingModeDraft}
+              onChange={(event) => {
+                const nextMode = event.currentTarget.value as OctopusInstallationMode;
+                setOctopusMountingModeDraft(nextMode);
+                if (nextMode === 'standard') {
+                  setOctopusMountingHeightDraft('');
+                  runStudyOctopusAction(() =>
+                    onSetStudyOctopusMounting(selectedObject.id, 'standard', undefined),
+                  );
+                }
+              }}
+            >
+              <option value="standard">Standard</option>
+              <option value="wall">Murale</option>
+            </select>
+          </label>
+
+          {octopusMountingModeDraft === 'wall' && (
+            <div className="octopus-mounting-editor">
+              <label className="property-field">
+                <span>Hauteur par rapport au sol fini</span>
+                <div className="metric-input-row">
+                  <input
+                    value={octopusMountingHeightDraft}
+                    inputMode="decimal"
+                    placeholder="1,80"
+                    onChange={(event) => setOctopusMountingHeightDraft(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && isWallMountingHeightValid) {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <span>m</span>
+                </div>
+              </label>
+              {!isWallMountingHeightValid && (
+                <p className="property-error">Hauteur à renseigner.</p>
+              )}
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={!isWallMountingHeightValid}
+                onClick={() => {
+                  runStudyOctopusAction(() =>
+                    onSetStudyOctopusMounting(selectedObject.id, 'wall', parsedMountingHeight),
+                  );
+                }}
+              >
+                Valider l'implantation
+              </button>
+            </div>
+          )}
 
           <h4>Pièces desservies</h4>
           <div className="study-served-rooms">
@@ -1101,63 +1249,67 @@ export function PropertiesPanel({
                       );
                     }}
                   />
-                  <span>{formatStudyRoomLabel(study, room)}</span>
+                  <span>{study ? formatStudyRoomLabel(study, room) : room.name}</span>
                 </label>
               );
             })}
           </div>
 
-          <h4>Ports étude</h4>
-          <div className="study-port-list">
-            {[...selectedObject.ports]
-              .sort((left, right) => left.number - right.number)
-              .map((port) => {
-                const assignment = assignmentByPort.get(port.number);
-                const assignedDevice = assignment
-                  ? study.devices.find((device) => device.id === assignment.studyDeviceId)
-                  : undefined;
-                const selectableDevices = getSelectableStudyDevicesForPort(assignableStudyDevices, assignedDevice);
+          {study && (
+            <>
+              <h4>Ports étude</h4>
+              <div className="study-port-list">
+                {[...selectedObject.ports]
+                  .sort((left, right) => left.number - right.number)
+                  .map((port) => {
+                    const assignment = assignmentByPort.get(port.number);
+                    const assignedDevice = assignment
+                      ? study.devices.find((device) => device.id === assignment.studyDeviceId)
+                      : undefined;
+                    const selectableDevices = getSelectableStudyDevicesForPort(assignableStudyDevices, assignedDevice);
 
-                return (
-                  <label key={port.number} className="study-port-row">
-                    <strong>{port.number}</strong>
-                    <select
-                      value={assignment?.studyDeviceId ?? ''}
-                      onChange={(event) => {
-                        const nextStudyDeviceId = event.currentTarget.value;
-                        runStudyOctopusAction(() => {
-                          if (!nextStudyDeviceId) {
-                            onUnassignOctopusPort(selectedObject.id, port.number);
-                            return;
-                          }
-                          const currentAssignment = getStudyDevicePortAssignment(study, nextStudyDeviceId);
-                          if (
-                            currentAssignment &&
-                            (currentAssignment.octopusId !== selectedObject.id ||
-                              currentAssignment.portNumber !== port.number)
-                          ) {
-                            onMoveStudyDeviceOctopusPortAssignment(
-                              nextStudyDeviceId,
-                              selectedObject.id,
-                              port.number,
-                            );
-                            return;
-                          }
-                          onAssignStudyDeviceToOctopusPort(selectedObject.id, port.number, nextStudyDeviceId);
-                        });
-                      }}
-                    >
-                      <option value="">Libre</option>
-                      {selectableDevices.map((device) => (
-                        <option key={device.id} value={device.id}>
-                          {formatStudyDevicePortLabel(study, device)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                );
-              })}
-          </div>
+                    return (
+                      <label key={port.number} className="study-port-row">
+                        <strong>{port.number}</strong>
+                        <select
+                          value={assignment?.studyDeviceId ?? ''}
+                          onChange={(event) => {
+                            const nextStudyDeviceId = event.currentTarget.value;
+                            runStudyOctopusAction(() => {
+                              if (!nextStudyDeviceId) {
+                                onUnassignOctopusPort(selectedObject.id, port.number);
+                                return;
+                              }
+                              const currentAssignment = getStudyDevicePortAssignment(study, nextStudyDeviceId);
+                              if (
+                                currentAssignment &&
+                                (currentAssignment.octopusId !== selectedObject.id ||
+                                  currentAssignment.portNumber !== port.number)
+                              ) {
+                                onMoveStudyDeviceOctopusPortAssignment(
+                                  nextStudyDeviceId,
+                                  selectedObject.id,
+                                  port.number,
+                                );
+                                return;
+                              }
+                              onAssignStudyDeviceToOctopusPort(selectedObject.id, port.number, nextStudyDeviceId);
+                            });
+                          }}
+                        >
+                          <option value="">Libre</option>
+                          {selectableDevices.map((device) => (
+                            <option key={device.id} value={device.id}>
+                              {formatStudyDevicePortLabel(study, device)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })}
+              </div>
+            </>
+          )}
         </section>
       )}
 
@@ -1244,6 +1396,48 @@ export function PropertiesPanel({
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {selectedObject.type === 'apparatus' && sourceStudyDevices.length === 0 && study && study.levels.length > 0 && (
+        <section className="property-section">
+          <h3>Localisation</h3>
+          <label className="property-field">
+            <span>Niveau</span>
+            <select
+              value={manualApparatusLevelId ?? ''}
+              onChange={(event) => {
+                const levelId = event.currentTarget.value || undefined;
+                onSetManualApparatusLocation(selectedObject.id, levelId, undefined);
+              }}
+            >
+              <option value="">Non défini</option>
+              {study.levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.code ? `${level.code} : ${level.name}` : level.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="property-field">
+            <span>Pièce</span>
+            <select
+              value={manualApparatusRoomId ?? ''}
+              disabled={!manualApparatusLevelId}
+              onChange={(event) => {
+                const roomId = event.currentTarget.value || undefined;
+                onSetManualApparatusLocation(selectedObject.id, manualApparatusLevelId, roomId);
+              }}
+            >
+              <option value="">Non définie</option>
+              {manualApparatusRooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </section>
       )}
 

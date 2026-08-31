@@ -3,18 +3,27 @@ import test from 'node:test';
 import { createApparatusInstance } from '../../domain/apparatus';
 import { createOctopus } from '../../domain/octopus';
 import {
+  addStudyLevel,
+  addStudyRoom,
   assignStudyDeviceToOctopusPort,
   createImportedStudy,
   getStudyDevicePortAssignment,
+  getStudyOctopusInstallationHeight,
+  getStudyOctopusInstallationMode,
   setStudyOctopusServedRooms,
 } from '../../domain/importedStudy';
 import { createEmptyProject } from '../../storage/ProjectStorage';
-import type { ApparatusInstance, CpreyDrawProject } from '../../types/project';
+import type { ApparatusInstance, CpreyDrawProject, ImportedStudy } from '../../types/project';
 import {
+  createAddStudyLevelCommand,
+  createAddStudyRoomCommand,
   createConfigureStudyRepresentationCommand,
   createDissociateStudyGroupCommand,
   createAssignStudyDeviceToOctopusPortCommand,
   createMoveStudyDeviceOctopusPortAssignmentCommand,
+  createRemoveStudyRoomCommand,
+  createSetManualApparatusLocationCommand,
+  createSetStudyOctopusMountingCommand,
   createSetStudyOctopusServedRoomsCommand,
 } from './StudyCommands';
 
@@ -36,6 +45,14 @@ function importedApparatus(
       metricKey,
     },
   };
+}
+
+function requireStudy(project: CpreyDrawProject): ImportedStudy {
+  if (!project.study) {
+    assert.fail('Study should exist');
+  }
+
+  return project.study;
 }
 
 test('undo and redo a single apparatus substitution without changing imported reference', () => {
@@ -217,6 +234,27 @@ test('undo and redo served room changes', () => {
   assert.deepEqual(project.study?.octopuses?.[0].servedRoomIds, [roomId]);
 });
 
+test('undo and redo octopus wall mounting as one coherent snapshot', () => {
+  const octopus = createOctopus('comfort', { x: 40, y: 50 }, []);
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    octopuses: [octopus],
+  };
+  const command = createSetStudyOctopusMountingCommand(project, octopus.id, 'wall', 1.8, (nextProject) => {
+    project = nextProject;
+  });
+
+  command.execute();
+  assert.equal(getStudyOctopusInstallationMode(project.study, octopus.id), 'wall');
+  assert.equal(getStudyOctopusInstallationHeight(project.study, octopus.id), 1.8);
+  command.undo();
+  assert.equal(getStudyOctopusInstallationMode(project.study, octopus.id), 'standard');
+  assert.equal(getStudyOctopusInstallationHeight(project.study, octopus.id), undefined);
+  command.redo();
+  assert.equal(getStudyOctopusInstallationMode(project.study, octopus.id), 'wall');
+  assert.equal(getStudyOctopusInstallationHeight(project.study, octopus.id), 1.8);
+});
+
 test('undo and redo a study device port assignment', () => {
   const imported = importedApparatus('lampe', 'LA1', 'lampes');
   const octopus = createOctopus('comfort', { x: 40, y: 50 }, []);
@@ -270,4 +308,58 @@ test('undo and redo moving a study device port assignment', () => {
   assert.equal(getStudyDevicePortAssignment(project.study, deviceId)?.portNumber, 3);
   command.redo();
   assert.equal(getStudyDevicePortAssignment(project.study, deviceId)?.portNumber, 7);
+});
+
+test('undo and redo manual level and room commands', () => {
+  let project = createEmptyProject();
+  const addLevel = createAddStudyLevelCommand(project, 'RDC', (nextProject) => {
+    project = nextProject;
+  });
+
+  addLevel.execute();
+  assert.equal(project.study?.levels[0].id, 'level_001');
+  addLevel.undo();
+  assert.equal(project.study, undefined);
+  addLevel.redo();
+
+  const addRoom = createAddStudyRoomCommand(project, 'level_001', 'Cuisine', (nextProject) => {
+    project = nextProject;
+  });
+  addRoom.execute();
+  assert.equal(requireStudy(project).levels[0].rooms[0].id, 'room_001');
+
+  const removeRoom = createRemoveStudyRoomCommand(project, 'room_001', (nextProject) => {
+    project = nextProject;
+  });
+  removeRoom.execute();
+  assert.equal(requireStudy(project).levels[0].rooms.length, 0);
+  removeRoom.undo();
+  assert.equal(requireStudy(project).levels[0].rooms[0].name, 'Cuisine');
+  removeRoom.redo();
+  assert.equal(requireStudy(project).levels[0].rooms.length, 0);
+});
+
+test('undo and redo manual apparatus location command', () => {
+  let project = addStudyRoom(addStudyLevel(createEmptyProject(), 'RDC'), 'level_001', 'Cuisine');
+  const apparatus = createApparatusInstance('prise-16a', { x: 10, y: 20 }, []);
+  project = { ...project, apparatus: [apparatus] };
+
+  const command = createSetManualApparatusLocationCommand(
+    project,
+    apparatus.id,
+    'level_001',
+    'room_001',
+    (nextProject) => {
+      project = nextProject;
+    },
+  );
+
+  command.execute();
+  assert.equal(project.apparatus[0].levelId, 'level_001');
+  assert.equal(project.apparatus[0].roomId, 'room_001');
+  command.undo();
+  assert.equal(project.apparatus[0].levelId, undefined);
+  assert.equal(project.apparatus[0].roomId, undefined);
+  command.redo();
+  assert.equal(project.apparatus[0].roomId, 'room_001');
 });

@@ -371,6 +371,7 @@ function createDuctWithGeometry(
   const duct: Duct = {
     id: `duct-${Date.now()}-${ductIdSequence}`,
     ...properties,
+    routeMode: properties.routeMode ?? 'standard',
     visible: true,
     locked: false,
     waypoints: [],

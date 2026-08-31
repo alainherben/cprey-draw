@@ -5,6 +5,10 @@ import { createOctopus } from './octopus';
 import { createEmptyProject } from '../storage/ProjectStorage';
 import type { ApparatusInstance, CpreyDrawProject } from '../types/project';
 import {
+  addStudyLevel,
+  addStudyRoom,
+  canRemoveStudyLevel,
+  canRemoveStudyRoom,
   configureStudyPhysicalRepresentation,
   createImportedStudy,
   dissociateStudyPhysicalGroup,
@@ -19,15 +23,25 @@ import {
   getStudyDeviceSelectionObjectId,
   getStudyDevicesForLevel,
   getStudyDevicesForRoom,
+  getStudyOctopusInstallationHeight,
+  getStudyOctopusInstallationMode,
   getStudyOctopus,
   getStudyPlacementTargetsForRoom,
   getStudyProgress,
   getStudyProgressForRoom,
   markStudyDevicePlaced,
   markStudyDevicesPlaced,
+  mergeImportedStudyReference,
   moveStudyDeviceOctopusPortAssignment,
+  normalizeLocationName,
+  parseMetricInput,
   parseStudyLocation,
+  removeStudyRoom,
+  renameStudyLevel,
+  renameStudyRoom,
+  setManualApparatusLocation,
   setStudyOctopusInstallation,
+  setStudyOctopusMounting,
   setStudyOctopusServedRooms,
   shouldDisplayApparatusForActiveLevel,
   syncStudyWithDrawing,
@@ -906,4 +920,208 @@ test('keeps octopus port assignments when changing a switch physical model', () 
   assert.equal(changed.study?.devices[0].drawingCatalogId, 'interrupteur-v&v');
   assert.equal(getStudyDevicePortAssignment(changed.study, 'device_001')?.octopusId, octopus.id);
   assert.equal(getStudyDevicePortAssignment(changed.study, 'device_001')?.portNumber, 3);
+});
+
+test('creates manual study levels and rooms from an empty project with stable ids', () => {
+  let project = createEmptyProject();
+  project = addStudyLevel(project, '  RDC  ');
+  project = addStudyRoom(project, 'level_001', ' Cuisine ');
+
+  assert.equal(project.study?.levels.length, 1);
+  assert.equal(project.study?.levels[0].id, 'level_001');
+  assert.equal(project.study?.levels[0].name, 'RDC');
+  assert.equal(project.activeLevelId, 'level_001');
+  assert.equal(project.study?.levels[0].rooms[0].id, 'room_001');
+  assert.equal(project.study?.levels[0].rooms[0].levelId, 'level_001');
+  assert.equal(project.study?.levels[0].rooms[0].name, 'Cuisine');
+});
+
+test('renames manual levels and rooms without changing ids', () => {
+  let project = addStudyRoom(addStudyLevel(createEmptyProject(), 'RDC'), 'level_001', 'Cuisine');
+  project = renameStudyLevel(project, 'level_001', 'Rez-de-chaussée');
+  project = renameStudyRoom(project, 'room_001', 'Cuisine ouverte');
+
+  assert.equal(project.study?.levels[0].id, 'level_001');
+  assert.equal(project.study?.levels[0].name, 'Rez-de-chaussée');
+  assert.equal(project.study?.levels[0].rooms[0].id, 'room_001');
+  assert.equal(project.study?.levels[0].rooms[0].name, 'Cuisine ouverte');
+});
+
+test('rejects empty and duplicate location names with normalized comparison', () => {
+  let project = addStudyLevel(createEmptyProject(), 'RDC');
+  project = addStudyRoom(project, 'level_001', 'Cuisine');
+
+  assert.equal(normalizeLocationName('  Cuisine   ouverte '), 'cuisine ouverte');
+  assert.throws(() => addStudyLevel(project, '   '), /obligatoire/);
+  assert.throws(() => addStudyLevel(project, 'rdc'), /existe déjà/);
+  assert.throws(() => addStudyRoom(project, 'level_001', 'cuisine'), /existe déjà/);
+
+  project = addStudyLevel(project, 'Étage');
+  project = addStudyRoom(project, 'level_002', 'cuisine');
+  assert.equal(project.study?.levels[1].rooms[0].name, 'cuisine');
+});
+
+test('removes an unused room and protects used rooms and levels', () => {
+  const apparatus = importedApparatus('prise-16a', 'PR1', '0 : RDC', 'Cuisine', 'CUISINE', 'prises');
+  const octopus = createOctopus('comfort', { x: 30, y: 40 }, []);
+  const study = createImportedStudy([apparatus], [octopus]);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    apparatus: [apparatus],
+    octopuses: [octopus],
+    study,
+    activeLevelId: study.levels[0].id,
+  };
+  const cuisineId = roomId(project, 'Cuisine');
+  project = addStudyRoom(project, study.levels[0].id, 'Cellier');
+  const cellierId = roomId(project, 'Cellier');
+
+  assert.equal(canRemoveStudyRoom(project, cuisineId).ok, false);
+  assert.equal(canRemoveStudyLevel(project, study.levels[0].id).ok, false);
+
+  const withoutCellier = removeStudyRoom(project, cellierId);
+  assert.equal(withoutCellier.study?.levels[0].rooms.some((room) => room.id === cellierId), false);
+});
+
+test('protects rooms used by manual octopus installation and served rooms', () => {
+  let project = addStudyLevel(createEmptyProject(), 'RDC');
+  project = addStudyRoom(project, 'level_001', 'Cuisine');
+  project = addStudyRoom(project, 'level_001', 'Cellier');
+  const octopus = createOctopus('comfort', { x: 30, y: 40 }, []);
+  project = { ...project, octopuses: [octopus] };
+  project = setStudyOctopusInstallation(project, octopus.id, 'level_001', 'room_002');
+  project = setStudyOctopusServedRooms(project, octopus.id, ['room_001']);
+
+  assert.equal(getStudyOctopus(project.study, octopus.id)?.installationRoomId, 'room_002');
+  assert.deepEqual(getStudyOctopus(project.study, octopus.id)?.servedRoomIds, ['room_001']);
+  assert.equal(canRemoveStudyRoom(project, 'room_001').ok, false);
+  assert.equal(canRemoveStudyRoom(project, 'room_002').ok, false);
+});
+
+test('sets wall mounting on a manual octopus without changing location or served rooms', () => {
+  let project = addStudyLevel(createEmptyProject(), 'RDC');
+  project = addStudyRoom(project, 'level_001', 'Cuisine');
+  project = addStudyRoom(project, 'level_001', 'Cellier');
+  const octopus = createOctopus('kitchen', { x: 30, y: 40 }, []);
+  project = { ...project, octopuses: [octopus] };
+  project = setStudyOctopusInstallation(project, octopus.id, 'level_001', 'room_002');
+  project = setStudyOctopusServedRooms(project, octopus.id, ['room_001']);
+
+  const wallMounted = setStudyOctopusMounting(project, octopus.id, 'wall', 1.8);
+  const studyOctopus = getStudyOctopus(wallMounted.study, octopus.id);
+
+  assert.equal(studyOctopus?.installationMode, 'wall');
+  assert.equal(studyOctopus?.installationHeightM, 1.8);
+  assert.equal(studyOctopus?.installationLevelId, 'level_001');
+  assert.equal(studyOctopus?.installationRoomId, 'room_002');
+  assert.deepEqual(studyOctopus?.servedRoomIds, ['room_001']);
+  assert.equal(wallMounted.octopuses[0].x, 30);
+  assert.equal(wallMounted.octopuses[0].y, 40);
+});
+
+test('creates the StudyOctopus entry when mounting a manual octopus', () => {
+  const octopus = createOctopus('comfort', { x: 10, y: 20 }, []);
+  const project = { ...createEmptyProject(), octopuses: [octopus] };
+
+  const mounted = setStudyOctopusMounting(project, octopus.id, 'wall', 1.82);
+
+  assert.equal(mounted.study?.levels.length, 0);
+  assert.equal(mounted.study?.devices.length, 0);
+  assert.equal(getStudyOctopusInstallationMode(mounted.study, octopus.id), 'wall');
+  assert.equal(getStudyOctopusInstallationHeight(mounted.study, octopus.id), 1.82);
+});
+
+test('parses French and point metric input for wall mounting height', () => {
+  assert.equal(parseMetricInput('1,80'), 1.8);
+  assert.equal(parseMetricInput('1.80'), 1.8);
+  assert.equal(parseMetricInput(' 1,82 '), 1.82);
+});
+
+test('rejects invalid wall mounting heights', () => {
+  const octopus = createOctopus('comfort', { x: 10, y: 20 }, []);
+  const project = { ...createEmptyProject(), octopuses: [octopus] };
+
+  assert.throws(() => setStudyOctopusMounting(project, octopus.id, 'wall', undefined), /strictement positive/);
+  assert.throws(() => setStudyOctopusMounting(project, octopus.id, 'wall', -0.5), /strictement positive/);
+  assert.throws(() => setStudyOctopusMounting(project, octopus.id, 'wall', Number.NaN), /strictement positive/);
+  assert.throws(() => setStudyOctopusMounting(project, octopus.id, 'wall', Number.POSITIVE_INFINITY), /strictement positive/);
+});
+
+test('returning to standard mounting clears the stored wall height', () => {
+  const octopus = createOctopus('comfort', { x: 10, y: 20 }, []);
+  const project = setStudyOctopusMounting(
+    { ...createEmptyProject(), octopuses: [octopus] },
+    octopus.id,
+    'wall',
+    1.8,
+  );
+
+  const standard = setStudyOctopusMounting(project, octopus.id, 'standard', undefined);
+
+  assert.equal(getStudyOctopusInstallationMode(standard.study, octopus.id), 'standard');
+  assert.equal(getStudyOctopusInstallationHeight(standard.study, octopus.id), undefined);
+  assert.equal(getStudyOctopus(standard.study, octopus.id)?.installationMode, undefined);
+  assert.equal(getStudyOctopus(standard.study, octopus.id)?.installationHeightM, undefined);
+});
+
+test('wall mounting keeps octopus port assignments unchanged', () => {
+  const pr1 = importedApparatus('prise-16a', 'PR1', '0 : RDC', 'Cuisine', 'CUISINE', 'prises');
+  const pr2 = importedApparatus('prise-16a', 'PR2', '0 : RDC', 'Cuisine', 'CUISINE', 'prises', [pr1]);
+  const octopus = createOctopus('kitchen', { x: 30, y: 40 }, []);
+  const study = createImportedStudy([pr1, pr2], [octopus]);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  const cuisineId = study.levels[0].rooms[0].id;
+  let project: CpreyDrawProject = { ...createEmptyProject(), octopuses: [octopus], study };
+  project = setStudyOctopusServedRooms(project, octopus.id, [cuisineId]);
+  project = assignStudyDeviceToOctopusPort(project, octopus.id, 5, 'device_001');
+  project = assignStudyDeviceToOctopusPort(project, octopus.id, 6, 'device_002');
+
+  const mounted = setStudyOctopusMounting(project, octopus.id, 'wall', 1.8);
+
+  assert.deepEqual(mounted.study?.portAssignments, project.study?.portAssignments);
+});
+
+test('stores manual apparatus location without creating a study device', () => {
+  let project = addStudyRoom(addStudyLevel(createEmptyProject(), 'RDC'), 'level_001', 'Cuisine');
+  const apparatus = createApparatusInstance('prise-16a', { x: 10, y: 20 }, []);
+  project = { ...project, apparatus: [apparatus] };
+
+  const located = setManualApparatusLocation(project, apparatus.id, 'level_001', 'room_001');
+
+  assert.equal(located.apparatus[0].levelId, 'level_001');
+  assert.equal(located.apparatus[0].roomId, 'room_001');
+  assert.equal(located.study?.devices.length, 0);
+});
+
+test('does not allow manual location to diverge from configurator devices', () => {
+  const apparatus = importedApparatus('prise-16a', 'PR1', '0 : RDC', 'Cuisine', 'CUISINE', 'prises');
+  const study = createImportedStudy([apparatus], []);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  const project: CpreyDrawProject = { ...createEmptyProject(), apparatus: [apparatus], study };
+
+  assert.throws(
+    () => setManualApparatusLocation(project, apparatus.id, 'level_001', 'room_001'),
+    /configurateur/,
+  );
+});
+
+test('merges imported levels and rooms into an existing manual reference while preserving ids', () => {
+  let manualProject = addStudyRoom(addStudyLevel(createEmptyProject(), 'RDC'), 'level_001', 'Cuisine');
+  const salon = importedApparatus('prise-16a', 'PR1', '0 : RDC', 'Salon', 'SALON', 'prises');
+  const cuisine = importedApparatus('prise-16a', 'PR2', '0 : RDC', 'Cuisine', 'CUISINE', 'prises', [salon]);
+  const importedStudy = createImportedStudy([salon, cuisine], []);
+  const merged = mergeImportedStudyReference(manualProject.study, importedStudy);
+
+  assert.equal(merged?.levels.length, 1);
+  assert.equal(merged?.levels[0].id, 'level_001');
+  assert.equal(merged?.levels[0].rooms.find((room) => room.name === 'Cuisine')?.id, 'room_001');
+  assert.equal(merged?.levels[0].rooms.find((room) => room.name === 'Salon')?.id, 'room_002');
+  assert.equal(merged?.devices.find((device) => device.identifier === 'PR2')?.roomId, 'room_001');
 });

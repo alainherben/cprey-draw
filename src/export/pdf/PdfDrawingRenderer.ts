@@ -7,6 +7,7 @@ import { getDuctPathPoints, getLinkColorCss } from '../../domain/ducts';
 import { getElectricalPanelPixelSize } from '../../domain/electricalPanel';
 import { getOctopusPixelSize, OCTOPUS_MODELS } from '../../domain/octopus';
 import { getOctopusLogoUrl } from '../../domain/octopusAssets';
+import { calculateDuctLengthBreakdownFromPoints } from '../../domain/technicalSettings';
 import type { ApparatusInstance, CpreyDrawProject, Point } from '../../types/project';
 import { getPdfCartoucheItems, getPdfPlanRect } from './PdfLayout';
 import type { PdfDocumentModel, PdfFitTransform, PdfPageModel, PdfPlanScope } from './PdfTypes';
@@ -97,7 +98,8 @@ function drawDucts(
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7);
       doc.setTextColor('#111827');
-      doc.text(`${geometry.lengthMeters.toFixed(2).replace('.', ',')} m`, labelPoint.x + 1.2, labelPoint.y - 1.2);
+      const length = calculateDuctLengthBreakdownFromPoints(project, duct, points, duct.controls).total;
+      doc.text(`${(length ?? geometry.lengthMeters).toFixed(2).replace('.', ',')} m`, labelPoint.x + 1.2, labelPoint.y - 1.2);
     }
   }
 }

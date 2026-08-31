@@ -1,4 +1,12 @@
-import type { CpreyDrawProject, Duct, DuctControlPoint, DuctSpecification, DuctWaypoint, Point } from '../../types/project';
+import type {
+  CpreyDrawProject,
+  Duct,
+  DuctControlPoint,
+  DuctRouteMode,
+  DuctSpecification,
+  DuctWaypoint,
+  Point,
+} from '../../types/project';
 import type { ApplyProject } from '../CommandManager';
 import { ProjectSnapshotCommand } from '../ProjectSnapshotCommand';
 import { getSynchronizableApparatusIdentifierFromDuct } from '../../domain/ducts';
@@ -67,6 +75,27 @@ export function createUpdateDuctSpecificationCommand(
   };
 
   return new ProjectSnapshotCommand('Modifier la spécification de gaine', before, after, applyProject);
+}
+
+export function createUpdateDuctRouteModeCommand(
+  before: CpreyDrawProject,
+  ductId: string,
+  routeMode: DuctRouteMode,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  const after: CpreyDrawProject = {
+    ...before,
+    ducts: before.ducts.map((duct) =>
+      duct.id === ductId
+        ? {
+            ...duct,
+            routeMode,
+          }
+        : duct,
+    ),
+  };
+
+  return new ProjectSnapshotCommand('Modifier le mode de passage', before, after, applyProject);
 }
 
 export function createAddDuctWaypointCommand(

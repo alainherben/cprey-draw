@@ -30,7 +30,10 @@ interface ToolbarProps {
   onToggleScaleMarkerVisible: () => void;
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
+  onSaveProjectAs: () => void;
+  onOpenProjectFile: (file: File) => void;
   onOpenSiteInformation: () => void;
+  onOpenTechnicalSettings: () => void;
   onOpenNomenclature: () => void;
   onOpenValidation: () => void;
   onOpenImportedStudy: () => void;
@@ -77,7 +80,10 @@ export function Toolbar({
   onToggleScaleMarkerVisible,
   onToggleLayerVisible,
   onSaveProject,
+  onSaveProjectAs,
+  onOpenProjectFile,
   onOpenSiteInformation,
+  onOpenTechnicalSettings,
   onOpenNomenclature,
   onOpenValidation,
   onOpenImportedStudy,
@@ -148,16 +154,30 @@ export function Toolbar({
           onToggle={setOpenMenu}
         >
           <MenuItem label="Nouveau projet" shortcut={newProjectShortcut} onSelect={() => runAndClose(onNewProject)} />
+          <JsonFileMenuItem
+            label="Ouvrir un projet…"
+            accept=".cpreydraw,.json,application/json"
+            onImport={(file) => {
+              onOpenProjectFile(file);
+              setOpenMenu(null);
+            }}
+          />
           <div className="menu-separator" />
-          <MenuItem label="Sauvegarder" onSelect={() => runAndClose(onSaveProject)} />
+          <MenuItem label="Enregistrer" shortcut="Cmd+S" onSelect={() => runAndClose(onSaveProject)} />
+          <MenuItem label="Enregistrer sous…" shortcut="Cmd+Shift+S" onSelect={() => runAndClose(onSaveProjectAs)} />
+          <div className="menu-separator" />
+          <MenuItem label="Niveaux et pièces…" onSelect={() => runAndClose(onOpenImportedStudy)} />
+          <div className="menu-separator" />
           <JsonFileMenuItem
             label="Importer depuis un configurateur"
+            accept=".json,application/json"
             onImport={(file) => {
               onImportConfiguratorProject(file);
               setOpenMenu(null);
             }}
           />
           <MenuItem label="Informations chantier" onSelect={() => runAndClose(onOpenSiteInformation)} />
+          <MenuItem label="Paramètres techniques" onSelect={() => runAndClose(onOpenTechnicalSettings)} />
           <MenuItem label="Exporter en PDF" onSelect={() => runAndClose(onOpenPdfExport)} />
           <MenuItem label="Nomenclature" onSelect={() => runAndClose(onOpenNomenclature)} />
           <MenuItem label="Contrôles" onSelect={() => runAndClose(onOpenValidation)} />
@@ -283,7 +303,6 @@ export function Toolbar({
             onSelect={() => runAndClose(onToggleShowDuctLengths)}
           />
           <div className="menu-separator" />
-          <MenuItem label="Étude importée" disabled={studyLevels.length === 0} onSelect={() => runAndClose(onOpenImportedStudy)} />
         </MenuButton>
 
         <MenuButton id="layers" label="Calques" openMenu={openMenu} onToggle={setOpenMenu}>
@@ -415,17 +434,18 @@ export function Toolbar({
 
 interface JsonFileMenuItemProps {
   label: string;
+  accept?: string;
   disabled?: boolean;
   onImport: (file: File) => void;
 }
 
-function JsonFileMenuItem({ label, disabled = false, onImport }: JsonFileMenuItemProps) {
+function JsonFileMenuItem({ label, accept = 'application/json,.json', disabled = false, onImport }: JsonFileMenuItemProps) {
   return (
     <label className={`menu-item file-menu-item ${disabled ? 'disabled' : ''}`} role="menuitem">
       <span>{label}</span>
       <input
         type="file"
-        accept="application/json,.json"
+        accept={accept}
         disabled={disabled}
         onChange={(event) => {
           const file = event.target.files?.[0];

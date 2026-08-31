@@ -1,10 +1,18 @@
-import type { ApparatusCatalogId, CpreyDrawProject } from '../../types/project';
+import type { ApparatusCatalogId, CpreyDrawProject, OctopusInstallationMode } from '../../types/project';
 import {
+  addStudyLevel,
+  addStudyRoom,
   assignStudyDeviceToOctopusPort,
   configureStudyPhysicalRepresentation,
   dissociateStudyPhysicalGroup,
   moveStudyDeviceOctopusPortAssignment,
+  removeStudyLevel,
+  removeStudyRoom,
+  renameStudyLevel,
+  renameStudyRoom,
+  setManualApparatusLocation,
   setStudyOctopusInstallation,
+  setStudyOctopusMounting,
   setStudyOctopusServedRooms,
   unassignOctopusPort,
 } from '../../domain/importedStudy';
@@ -38,6 +46,102 @@ export function createDissociateStudyGroupCommand(
   );
 }
 
+export function createAddStudyLevelCommand(
+  before: CpreyDrawProject,
+  name: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Ajouter un niveau',
+    before,
+    addStudyLevel(before, name),
+    applyProject,
+  );
+}
+
+export function createRenameStudyLevelCommand(
+  before: CpreyDrawProject,
+  levelId: string,
+  name: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Renommer un niveau',
+    before,
+    renameStudyLevel(before, levelId, name),
+    applyProject,
+  );
+}
+
+export function createRemoveStudyLevelCommand(
+  before: CpreyDrawProject,
+  levelId: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Supprimer un niveau',
+    before,
+    removeStudyLevel(before, levelId),
+    applyProject,
+  );
+}
+
+export function createAddStudyRoomCommand(
+  before: CpreyDrawProject,
+  levelId: string,
+  name: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Ajouter une pièce',
+    before,
+    addStudyRoom(before, levelId, name),
+    applyProject,
+  );
+}
+
+export function createRenameStudyRoomCommand(
+  before: CpreyDrawProject,
+  roomId: string,
+  name: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Renommer une pièce',
+    before,
+    renameStudyRoom(before, roomId, name),
+    applyProject,
+  );
+}
+
+export function createRemoveStudyRoomCommand(
+  before: CpreyDrawProject,
+  roomId: string,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Supprimer une pièce',
+    before,
+    removeStudyRoom(before, roomId),
+    applyProject,
+  );
+}
+
+export function createSetManualApparatusLocationCommand(
+  before: CpreyDrawProject,
+  apparatusId: string,
+  levelId: string | undefined,
+  roomId: string | undefined,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Localiser un appareillage',
+    before,
+    setManualApparatusLocation(before, apparatusId, levelId, roomId),
+    applyProject,
+  );
+}
+
 export function createSetStudyOctopusInstallationCommand(
   before: CpreyDrawProject,
   octopusId: string,
@@ -63,6 +167,21 @@ export function createSetStudyOctopusServedRoomsCommand(
     'Modifier pièces desservies',
     before,
     setStudyOctopusServedRooms(before, octopusId, servedRoomIds),
+    applyProject,
+  );
+}
+
+export function createSetStudyOctopusMountingCommand(
+  before: CpreyDrawProject,
+  octopusId: string,
+  installationMode: OctopusInstallationMode,
+  installationHeightM: number | undefined,
+  applyProject: ApplyProject,
+): ProjectSnapshotCommand {
+  return new ProjectSnapshotCommand(
+    'Modifier implantation pieuvre',
+    before,
+    setStudyOctopusMounting(before, octopusId, installationMode, installationHeightM),
     applyProject,
   );
 }

@@ -167,6 +167,8 @@ export interface ApparatusInstance extends DrawableObject {
   comments: string;
   importContext?: CdefImportContext;
   studyDeviceIds?: string[];
+  levelId?: string;
+  roomId?: string;
 }
 
 export type ConnectionTargetType = 'apparatus' | 'electrical-panel';
@@ -232,11 +234,14 @@ export interface DuctSpecification {
   conductors: DuctConductor[];
 }
 
+export type DuctRouteMode = 'standard' | 'crawl-space';
+
 export interface Duct {
   id: string;
   source: DuctEndpoint;
   target: DuctEndpoint;
   circuitOrigin: CircuitOrigin;
+  routeMode?: DuctRouteMode;
   visible: boolean;
   locked: boolean;
   waypoints: DuctWaypoint[];
@@ -308,11 +313,15 @@ export interface StudyPhysicalGroup {
   drawingObjectId?: string;
 }
 
+export type OctopusInstallationMode = 'standard' | 'wall';
+
 export interface StudyOctopus {
   octopusId: string;
   installationLevelId?: string;
   installationRoomId?: string;
   servedRoomIds?: string[];
+  installationMode?: OctopusInstallationMode;
+  installationHeightM?: number;
 }
 
 export type OctopusPortAssignmentSource = 'imported' | 'manual';
@@ -424,6 +433,14 @@ export interface ProjectAudit {
   updatedBy?: string;
 }
 
+export interface ProjectTechnicalSettings {
+  defaultCeilingHeight: number;
+  panelCenterHeightFromFloor: number;
+  ductConnectionMargin: number;
+  crawlSpaceHeight: number;
+  roomCeilingHeights?: Record<string, number>;
+}
+
 export interface CpreyDrawProject {
   schemaVersion: 1;
   project: ProjectInfo;
@@ -433,6 +450,7 @@ export interface CpreyDrawProject {
   ownership: ProjectOwnership;
   access: ProjectAccess;
   audit: ProjectAudit;
+  technicalSettings: ProjectTechnicalSettings;
   drawing: DrawingState;
   plans: Plan[];
   electricalPanel?: ElectricalPanel;

@@ -2,7 +2,8 @@ import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { createApparatusInstance } from '../domain/apparatus';
 import { getProjectLayers } from '../domain/layers';
 import { createOctopus, OCTOPUS_MODELS } from '../domain/octopus';
-import { createImportedStudy, syncStudyWithDrawing } from '../domain/importedStudy';
+import { createImportedStudy, mergeImportedStudyReference, syncStudyWithDrawing } from '../domain/importedStudy';
+import { createDefaultTechnicalSettings } from '../domain/technicalSettings';
 import { createEmptyProject } from '../storage/ProjectStorage';
 import type {
   ApparatusCatalogId,
@@ -59,7 +60,7 @@ export function importCdefProject(data: unknown, currentProject?: CpreyDrawProje
   const pieuvreTotals = selectPieuvreTotals(validation.data, warnings);
   const octopuses = createImportedOctopuses(pieuvreTotals, now);
   const apparatus = createImportedApparatus(validation.data.rooms, warnings, now);
-  const study = createImportedStudy(apparatus, octopuses);
+  const study = mergeImportedStudyReference(baseProject.study, createImportedStudy(apparatus, octopuses));
   const summary = createSummary(validation.data, pieuvreTotals, apparatus);
   const project: CpreyDrawProject = {
     ...baseProject,
@@ -74,6 +75,7 @@ export function importCdefProject(data: unknown, currentProject?: CpreyDrawProje
       projectVersion: 'V1.8',
     },
     status: 'design',
+    technicalSettings: createDefaultTechnicalSettings(),
     drawing: {
       ...baseProject.drawing,
       metersPerPixel: baseProject.drawing.metersPerPixel ?? 0.01,

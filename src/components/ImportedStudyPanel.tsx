@@ -12,14 +12,21 @@ import {
   getUnassignedStudyPlacementTargets,
   type StudyPlacementTarget,
 } from '../domain/importedStudy';
-import type { ApparatusCatalogId, ImportedStudy, Octopus, StudyDevice } from '../types/project';
+import type { ApparatusCatalogId, ImportedStudy, Octopus, StudyDevice, StudyLevel, StudyRoom } from '../types/project';
 
 interface ImportedStudyPanelProps {
-  study: ImportedStudy;
+  study: ImportedStudy | undefined;
   octopuses: Octopus[];
   activeLevelId?: string;
   pendingPlacementDeviceId?: string;
   onClose: () => void;
+  onChangeActiveLevel: (levelId: string) => void;
+  onAddLevel: (name: string) => void;
+  onRenameLevel: (levelId: string, name: string) => void;
+  onRemoveLevel: (levelId: string) => void;
+  onAddRoom: (levelId: string, name: string) => void;
+  onRenameRoom: (roomId: string, name: string) => void;
+  onRemoveRoom: (roomId: string) => void;
   onSelectTarget: (target: StudyPlacementTarget) => void;
   onConfigureRepresentation: (studyDeviceIds: string[], drawingCatalogId: ApparatusCatalogId) => void;
   onDissociateGroup: (physicalGroupId: string) => void;
@@ -31,22 +38,30 @@ export function ImportedStudyPanel({
   activeLevelId,
   pendingPlacementDeviceId,
   onClose,
+  onChangeActiveLevel,
+  onAddLevel,
+  onRenameLevel,
+  onRemoveLevel,
+  onAddRoom,
+  onRenameRoom,
+  onRemoveRoom,
   onSelectTarget,
   onConfigureRepresentation,
   onDissociateGroup,
 }: ImportedStudyPanelProps) {
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
-  const totalProgress = getStudyProgress(study);
+  const effectiveStudy = study ?? { levels: [], devices: [] };
+  const totalProgress = getStudyProgress(effectiveStudy);
   const sortedLevels = [
-    ...study.levels.filter((level) => level.id === activeLevelId),
-    ...study.levels.filter((level) => level.id !== activeLevelId),
+    ...effectiveStudy.levels.filter((level) => level.id === activeLevelId),
+    ...effectiveStudy.levels.filter((level) => level.id !== activeLevelId),
   ];
 
   return (
-    <aside className="study-panel" aria-label="Étude importée">
+    <aside className="study-panel" aria-label="Niveaux et pièces">
       <header className="study-panel-header">
         <div>
-          <h2>Étude importée</h2>
+          <h2>Niveaux et pièces</h2>
           <p>{totalProgress.placed}/{totalProgress.total} placés</p>
         </div>
         <button type="button" className="panel-close-button" onClick={onClose} aria-label="Fermer">
@@ -55,21 +70,43 @@ export function ImportedStudyPanel({
       </header>
 
       <div className="study-panel-content">
+        {effectiveStudy.levels.length > 0 ? (
+          <label className="study-active-level">
+            <span>Niveau actif</span>
+            <select
+              value={activeLevelId ?? ''}
+              onChange={(event) => onChangeActiveLevel(event.currentTarget.value)}
+            >
+              {effectiveStudy.levels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {formatLevelLabel(level)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="study-empty-message">Aucun niveau défini.</p>
+        )}
+
         {sortedLevels.map((level) => {
-          const levelDevices = study.devices.filter((device) => device.levelId === level.id);
+          const levelDevices = effectiveStudy.devices.filter((device) => device.levelId === level.id);
           const levelPlaced = levelDevices.filter((device) => device.status === 'placed').length;
           const isActive = level.id === activeLevelId;
 
           return (
             <section key={level.id} className={`study-level ${isActive ? 'active' : ''}`}>
               <header>
-                <h3>{level.code ? `${level.code} : ${level.name}` : level.name}</h3>
+                <h3>{formatLevelLabel(level)}</h3>
                 <span>{levelPlaced}/{levelDevices.length}</span>
               </header>
+              <div className="study-location-actions">
+                <button type="button" onClick={() => renameLevel(level, onRenameLevel)}>Renommer</button>
+                <button type="button" onClick={() => onRemoveLevel(level.id)}>Supprimer</button>
+              </div>
 
               <div className="study-rooms">
                 {level.rooms.map((room) => {
-                  const roomProgress = getStudyProgressForRoom(study, room.id);
+                  const roomProgress = getStudyProgressForRoom(effectiveStudy, room.id);
                   return (
                     <details key={room.id} open={isActive}>
                       <summary>
@@ -79,11 +116,15 @@ export function ImportedStudyPanel({
                         </span>
                         <strong>{roomProgress.placed}/{roomProgress.total}</strong>
                       </summary>
+                      <div className="study-location-actions room-actions">
+                        <button type="button" onClick={() => renameRoom(room, onRenameRoom)}>Renommer</button>
+                        <button type="button" onClick={() => onRemoveRoom(room.id)}>Supprimer</button>
+                      </div>
                       <div className="study-device-list">
-                        {getStudyPlacementTargetsForRoom(study, room.id).map((target) => (
+                        {getStudyPlacementTargetsForRoom(effectiveStudy, room.id).map((target) => (
                           <StudyTargetButton
                             key={target.id}
-                            study={study}
+                            study={effectiveStudy}
                             target={target}
                             octopuses={octopuses}
                             active={target.id === pendingPlacementDeviceId}
@@ -97,21 +138,24 @@ export function ImportedStudyPanel({
                   );
                 })}
               </div>
+              <button type="button" className="study-add-button" onClick={() => addRoom(level.id, onAddRoom)}>
+                + Ajouter une pièce
+              </button>
             </section>
           );
         })}
 
-        {study.devices.some((device) => !device.levelId) && (
+        {effectiveStudy.devices.some((device) => !device.levelId) && (
           <section className="study-level">
             <header>
               <h3>Non affecté</h3>
-              <span>{study.devices.filter((device) => !device.levelId && device.status === 'placed').length}/{study.devices.filter((device) => !device.levelId).length}</span>
+              <span>{effectiveStudy.devices.filter((device) => !device.levelId && device.status === 'placed').length}/{effectiveStudy.devices.filter((device) => !device.levelId).length}</span>
             </header>
             <div className="study-device-list">
-              {getUnassignedStudyPlacementTargets(study).map((target) => (
+              {getUnassignedStudyPlacementTargets(effectiveStudy).map((target) => (
                 <StudyTargetButton
                   key={target.id}
-                  study={study}
+                  study={effectiveStudy}
                   target={target}
                   octopuses={octopuses}
                   active={target.id === pendingPlacementDeviceId}
@@ -123,11 +167,15 @@ export function ImportedStudyPanel({
             </div>
           </section>
         )}
+
+        <button type="button" className="study-add-button primary" onClick={() => addLevel(onAddLevel)}>
+          + Ajouter un niveau
+        </button>
       </div>
 
       {editingDeviceId && (
         <StudyRepresentationDialog
-          study={study}
+          study={effectiveStudy}
           deviceId={editingDeviceId}
           onCancel={() => setEditingDeviceId(null)}
           onApply={(studyDeviceIds, drawingCatalogId) => {
@@ -138,6 +186,38 @@ export function ImportedStudyPanel({
       )}
     </aside>
   );
+}
+
+function formatLevelLabel(level: StudyLevel): string {
+  return level.code ? `${level.code} : ${level.name}` : level.name;
+}
+
+function addLevel(onAddLevel: (name: string) => void): void {
+  const name = window.prompt('Nom du niveau');
+  if (name !== null) {
+    onAddLevel(name);
+  }
+}
+
+function renameLevel(level: StudyLevel, onRenameLevel: (levelId: string, name: string) => void): void {
+  const name = window.prompt('Nouveau nom du niveau', level.name);
+  if (name !== null) {
+    onRenameLevel(level.id, name);
+  }
+}
+
+function addRoom(levelId: string, onAddRoom: (levelId: string, name: string) => void): void {
+  const name = window.prompt('Nom de la pièce');
+  if (name !== null) {
+    onAddRoom(levelId, name);
+  }
+}
+
+function renameRoom(room: StudyRoom, onRenameRoom: (roomId: string, name: string) => void): void {
+  const name = window.prompt('Nouveau nom de la pièce', room.name);
+  if (name !== null) {
+    onRenameRoom(room.id, name);
+  }
 }
 
 function StudyTargetButton({

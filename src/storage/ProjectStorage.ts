@@ -17,6 +17,7 @@ import { createBaseLayers, getProjectLayers } from '../domain/layers';
 import { normalizeDuctControlsForPoints } from '../domain/ductGeometry';
 import { getDuctPathPoints } from '../domain/ducts';
 import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
+import { createDefaultTechnicalSettings, normalizeTechnicalSettings } from '../domain/technicalSettings';
 import { normalizeImportedStudy, syncStudyWithDrawing } from '../domain/importedStudy';
 import {
   createDefaultProjectAccess,
@@ -33,6 +34,20 @@ import {
 } from '../domain/site';
 
 const STORAGE_KEY = 'cprey-draw.current-project.v1';
+export const PROJECT_FILE_EXTENSION = '.cpreydraw';
+export const DEFAULT_PROJECT_FILE_NAME = `projet-cprey-draw${PROJECT_FILE_EXTENSION}`;
+
+export type ProjectFileErrorCode = 'invalid-json' | 'invalid-project' | 'unsupported-version';
+
+export class ProjectFileError extends Error {
+  constructor(
+    public readonly code: ProjectFileErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProjectFileError';
+  }
+}
 
 function createProjectId(): string {
   return `project-${Date.now()}`;
@@ -54,6 +69,7 @@ export function createDefaultProject(): CpreyDrawProject {
     ownership: createDefaultProjectOwnership(),
     access: createDefaultProjectAccess(),
     audit: createProjectAudit(now),
+    technicalSettings: createDefaultTechnicalSettings(),
     drawing: {
       viewport: { x: 0, y: 0, scale: 1 },
       metersPerPixel: null,
@@ -130,7 +146,7 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
   const activeLevelId = typeof project.activeLevelId === 'string' &&
     normalizedStudy?.levels.some((level) => level.id === project.activeLevelId)
     ? project.activeLevelId
-    : undefined;
+    : normalizedStudy?.levels[0]?.id;
   const normalizedProject: CpreyDrawProject = {
     ...project,
     site: normalizeSiteInformation(project.site),
@@ -139,6 +155,7 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
     ownership: normalizeProjectOwnership(project.ownership),
     access: normalizeProjectAccess(project.access),
     audit: normalizeProjectAudit(project.audit, auditFallbackDate),
+    technicalSettings: normalizeTechnicalSettings(project.technicalSettings),
     drawing: {
       viewport: project.drawing.viewport,
       metersPerPixel: project.drawing.metersPerPixel,
@@ -249,6 +266,8 @@ function normalizeApparatus(
     studyDeviceIds: Array.isArray(apparatus.studyDeviceIds)
       ? apparatus.studyDeviceIds.filter((studyDeviceId) => typeof studyDeviceId === 'string')
       : undefined,
+    levelId: typeof apparatus.levelId === 'string' ? apparatus.levelId : undefined,
+    roomId: typeof apparatus.roomId === 'string' ? apparatus.roomId : undefined,
   };
 }
 
@@ -299,6 +318,7 @@ function normalizeDuct(duct: LegacyDuct, project: LegacyProject): Duct {
     source,
     target,
     circuitOrigin,
+    routeMode: duct.routeMode === 'crawl-space' ? 'crawl-space' : 'standard',
     visible: duct.visible ?? true,
     locked: duct.locked ?? false,
     waypoints: Array.isArray(duct.waypoints)
@@ -363,6 +383,65 @@ function isProject(value: unknown): value is CpreyDrawProject {
   );
 }
 
+function prepareProjectForPersistence(project: CpreyDrawProject): CpreyDrawProject {
+  const updatedAt = new Date().toISOString();
+  const existingSite = project.site ?? createDefaultSiteInformation();
+  const syncedProject = syncStudyWithDrawing(project);
+
+  return {
+    ...syncedProject,
+    project: {
+      ...syncedProject.project,
+      updatedAt,
+    },
+    site: normalizeSiteInformation(existingSite),
+    audit: {
+      ...syncedProject.audit,
+      updatedAt,
+    },
+  };
+}
+
+export function serializeProject(project: CpreyDrawProject): string {
+  return JSON.stringify(prepareProjectForPersistence(project), null, 2);
+}
+
+export function deserializeProject(rawProject: string): CpreyDrawProject {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawProject);
+  } catch {
+    throw new ProjectFileError('invalid-json', 'Le fichier sélectionné n’est pas un JSON valide.');
+  }
+
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    'schemaVersion' in parsed &&
+    (parsed as { schemaVersion?: unknown }).schemaVersion !== 1
+  ) {
+    throw new ProjectFileError('unsupported-version', 'Version de fichier non prise en charge.');
+  }
+
+  if (!isProject(parsed)) {
+    throw new ProjectFileError('invalid-project', 'Le fichier sélectionné n’est pas un projet CPREY DRAW valide.');
+  }
+
+  return normalizeProject(parsed as LegacyProject);
+}
+
+export function createSafeProjectFileName(projectName: string | undefined): string {
+  const rawName = (projectName ?? '').trim().replace(/\.(cpreydraw|json)$/i, '');
+  const safeName = rawName
+    .trim()
+    .replace(/[\/\\:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return `${safeName || 'projet-cprey-draw'}${PROJECT_FILE_EXTENSION}`;
+}
+
 export const ProjectStorage = {
   load(): CpreyDrawProject {
     const rawProject = window.localStorage.getItem(STORAGE_KEY);
@@ -372,31 +451,14 @@ export const ProjectStorage = {
     }
 
     try {
-      const parsed: unknown = JSON.parse(rawProject);
-      return isProject(parsed) ? normalizeProject(parsed) : createDefaultProject();
+      return deserializeProject(rawProject);
     } catch {
       return createDefaultProject();
     }
   },
 
   save(project: CpreyDrawProject): void {
-    const updatedAt = new Date().toISOString();
-    const existingSite = project.site ?? createDefaultSiteInformation();
-    const syncedProject = syncStudyWithDrawing(project);
-    const projectToSave: CpreyDrawProject = {
-      ...syncedProject,
-      project: {
-        ...syncedProject.project,
-        updatedAt,
-      },
-      site: normalizeSiteInformation(existingSite),
-      audit: {
-        ...syncedProject.audit,
-        updatedAt,
-      },
-    };
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projectToSave));
+    window.localStorage.setItem(STORAGE_KEY, serializeProject(project));
   },
 
   createNew(): CpreyDrawProject {

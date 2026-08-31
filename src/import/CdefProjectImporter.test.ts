@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { CommandManager } from '../commands/CommandManager';
 import { ProjectSnapshotCommand } from '../commands/ProjectSnapshotCommand';
-import { getCompatibleCatalogItems } from '../domain/importedStudy';
+import { addStudyLevel, addStudyRoom, getCompatibleCatalogItems } from '../domain/importedStudy';
 import { createEmptyProject, ProjectStorage } from '../storage/ProjectStorage';
 import type { CpreyDrawProject } from '../types/project';
 import { importCdefProject } from './CdefProjectImporter';
@@ -153,6 +153,7 @@ test('imports a minimal valid CDEF project', () => {
   assert.equal(result.warnings.length, 0);
   assert.equal(result.project.octopuses.length, 8);
   assert.equal(result.project.apparatus.length, 19);
+  assert.equal(result.project.technicalSettings.panelCenterHeightFromFloor, 1.3);
 });
 
 test('rejects incorrect schema', () => {
@@ -390,6 +391,20 @@ test('imports CDEF after creating and persisting a new empty project', () => {
   assert.equal(restored.apparatus.length, 19);
   assert.equal(restored.ducts.length, 0);
   assert.equal(restored.origin.cdef?.rooms.some((room) => room.roomName === 'Séjour'), true);
+});
+
+test('merges CDEF rooms with an existing manual levels and rooms reference', () => {
+  let currentProject = addStudyLevel(createEmptyProject(), 'RDC');
+  currentProject = addStudyRoom(currentProject, 'level_001', 'Séjour');
+  const imported = importCdefProject(cdef(), currentProject).project;
+
+  assert.equal(imported.study?.levels.length, 1);
+  assert.equal(imported.study?.levels[0].id, 'level_001');
+  assert.equal(imported.study?.levels[0].rooms.length, 1);
+  assert.equal(imported.study?.levels[0].rooms[0].id, 'room_001');
+  const apparatusDevices = imported.study?.devices.filter((device) => device.type === 'apparatus') ?? [];
+  assert.equal(apparatusDevices.every((device) => device.levelId === 'level_001'), true);
+  assert.equal(apparatusDevices.every((device) => device.roomId === 'room_001'), true);
 });
 
 test('undo and redo import as a single project snapshot', () => {

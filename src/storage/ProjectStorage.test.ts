@@ -5,18 +5,31 @@ import { createConnection } from '../domain/connections';
 import { buildQuadraticDuctGeometry, createDuctControlPoint } from '../domain/ductGeometry';
 import { createDirectPanelDuct } from '../domain/ducts';
 import { createElectricalPanel } from '../domain/electricalPanel';
+import { createDefaultTechnicalSettings } from '../domain/technicalSettings';
 import {
+  addStudyLevel,
+  addStudyRoom,
   assignStudyDeviceToOctopusPort,
   configureStudyPhysicalRepresentation,
   createImportedStudy,
   markStudyDevicesPlaced,
+  setManualApparatusLocation,
   setStudyOctopusInstallation,
+  setStudyOctopusMounting,
   setStudyOctopusServedRooms,
 } from '../domain/importedStudy';
 import { createOctopus } from '../domain/octopus';
 import { createOctopusOutputOverride, upsertOctopusOutputOverride } from '../domain/octopusOutputs';
 import type { CpreyDrawProject } from '../types/project';
-import { createDefaultProject, createEmptyProject, ProjectStorage } from './ProjectStorage';
+import {
+  createDefaultProject,
+  createEmptyProject,
+  createSafeProjectFileName,
+  deserializeProject,
+  ProjectFileError,
+  ProjectStorage,
+  serializeProject,
+} from './ProjectStorage';
 
 function installMemoryStorage(storage = new Map<string, string>()) {
   Object.defineProperty(globalThis, 'window', {
@@ -861,6 +874,7 @@ test('createNew saves and reloads an empty project without previous business dat
     assert.deepEqual(project.ducts, []);
     assert.deepEqual(project.site, {});
     assert.deepEqual(project.origin, { type: 'manual' });
+    assert.deepEqual(project.technicalSettings, createDefaultTechnicalSettings());
     assert.equal(project.status, 'draft');
     assert.equal(project.drawing.metersPerPixel, null);
     assert.equal(project.drawing.scaleReference, null);
@@ -870,6 +884,103 @@ test('createNew saves and reloads an empty project without previous business dat
     assert.equal(project.study, undefined);
     assert.equal(project.activeLevelId, undefined);
   }
+});
+
+test('saves and restores technical settings', () => {
+  installMemoryStorage();
+  const project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    technicalSettings: {
+      defaultCeilingHeight: 2.65,
+      panelCenterHeightFromFloor: 1.45,
+      ductConnectionMargin: 0.55,
+      crawlSpaceHeight: 0.75,
+      roomCeilingHeights: {
+        room_a: 2.8,
+      },
+    },
+  };
+
+  ProjectStorage.save(project);
+  const restored = ProjectStorage.load();
+
+  assert.deepEqual(restored.technicalSettings, project.technicalSettings);
+});
+
+test('loads legacy project without technical settings and legacy duct without route mode', () => {
+  const storage = installMemoryStorage();
+  const panel = createElectricalPanel({ x: 0, y: 0 });
+  const apparatus = createApparatusInstance('prise-rj45', { x: 100, y: 0 }, []);
+  const baseProject = {
+    ...createEmptyProject(),
+    drawing: { ...createEmptyProject().drawing, metersPerPixel: 0.01 },
+    electricalPanel: panel,
+    apparatus: [apparatus],
+  };
+  const result = createDirectPanelDuct(baseProject, panel.id, apparatus.id);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  const legacyProject = {
+    ...baseProject,
+    ducts: [Object.fromEntries(Object.entries(result.duct).filter(([key]) => key !== 'routeMode'))],
+  };
+  delete (legacyProject as Partial<CpreyDrawProject>).technicalSettings;
+  storage.set('cprey-draw.current-project.v1', JSON.stringify(legacyProject));
+
+  const restored = ProjectStorage.load();
+
+  assert.deepEqual(restored.technicalSettings, createDefaultTechnicalSettings());
+  assert.equal(restored.ducts[0]?.routeMode, 'standard');
+});
+
+test('migrates v1.8.5 panel distance and saves only panel center height', () => {
+  const storage = installMemoryStorage();
+  const legacyProject = {
+    ...createEmptyProject(),
+    technicalSettings: {
+      defaultCeilingHeight: 2.5,
+      panelDistanceFromCeiling: 0.3,
+      ductConnectionMargin: 0.5,
+      crawlSpaceHeight: 0.6,
+      roomCeilingHeights: {},
+    },
+  };
+  storage.set('cprey-draw.current-project.v1', JSON.stringify(legacyProject));
+
+  const restored = ProjectStorage.load();
+  assert.equal(restored.technicalSettings.panelCenterHeightFromFloor, 2.2);
+
+  ProjectStorage.save(restored);
+  const rawSaved = storage.get('cprey-draw.current-project.v1') ?? '';
+  assert.equal(rawSaved.includes('panelCenterHeightFromFloor'), true);
+  assert.equal(rawSaved.includes('panelDistanceFromCeiling'), false);
+});
+
+test('saves and restores duct route mode', () => {
+  installMemoryStorage();
+  const panel = createElectricalPanel({ x: 0, y: 0 });
+  const apparatus = createApparatusInstance('prise-rj45', { x: 100, y: 0 }, []);
+  const baseProject = {
+    ...createEmptyProject(),
+    drawing: { ...createEmptyProject().drawing, metersPerPixel: 0.01 },
+    electricalPanel: panel,
+    apparatus: [apparatus],
+  };
+  const result = createDirectPanelDuct(baseProject, panel.id, apparatus.id);
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  ProjectStorage.save({
+    ...baseProject,
+    ducts: [{ ...result.duct, routeMode: 'crawl-space' }],
+  });
+
+  assert.equal(ProjectStorage.load().ducts[0]?.routeMode, 'crawl-space');
 });
 
 test('saves and restores imported study and active level', () => {
@@ -1067,4 +1178,280 @@ test('saves and restores study octopus installation served rooms and port assign
       { octopusId: octopus.id, portNumber: 5, studyDeviceId: 'device_002', source: 'manual' },
     ],
   );
+});
+
+test('saves and restores manual levels rooms active level and apparatus location', () => {
+  installMemoryStorage();
+  let project = addStudyLevel(createEmptyProject(), 'RDC');
+  project = addStudyRoom(project, 'level_001', 'Cuisine');
+  const apparatus = createApparatusInstance('prise-16a', { x: 10, y: 20 }, []);
+  project = {
+    ...project,
+    activeLevelId: 'level_001',
+    apparatus: [apparatus],
+  };
+  project = setManualApparatusLocation(project, apparatus.id, 'level_001', 'room_001');
+
+  ProjectStorage.save(project);
+  const restored = ProjectStorage.load();
+
+  assert.equal(restored?.study?.levels[0].id, 'level_001');
+  assert.equal(restored?.study?.levels[0].rooms[0].id, 'room_001');
+  assert.equal(restored?.activeLevelId, 'level_001');
+  assert.equal(restored?.apparatus[0].levelId, 'level_001');
+  assert.equal(restored?.apparatus[0].roomId, 'room_001');
+});
+
+test('creates safe cprey draw project filenames', () => {
+  assert.equal(createSafeProjectFileName('Maison Dupont'), 'Maison-Dupont.cpreydraw');
+  assert.equal(createSafeProjectFileName('Maison/Herben: RDC.json'), 'Maison-Herben-RDC.cpreydraw');
+  assert.equal(createSafeProjectFileName('   '), 'projet-cprey-draw.cpreydraw');
+});
+
+test('serializes and deserializes a project file with UTF-8 names', () => {
+  let project = addStudyLevel(createEmptyProject(), 'Étage');
+  project = addStudyRoom(project, 'level_001', 'Séjour');
+  project = addStudyRoom(project, 'level_001', 'Entrée');
+  project = {
+    ...project,
+    project: { ...project.project, name: 'Maison Élodie' },
+  };
+
+  const restored = deserializeProject(serializeProject(project));
+
+  assert.equal(restored.project.name, 'Maison Élodie');
+  assert.equal(restored.study?.levels[0].name, 'Étage');
+  assert.equal(restored.study?.levels[0].rooms[0].name, 'Séjour');
+  assert.equal(restored.study?.levels[0].rooms[1].name, 'Entrée');
+});
+
+test('rejects corrupted and invalid project files with explicit errors', () => {
+  assert.throws(
+    () => deserializeProject('{ "schemaVersion":'),
+    (error) => error instanceof ProjectFileError && error.code === 'invalid-json',
+  );
+  assert.throws(
+    () => deserializeProject('{ "hello": "world" }'),
+    (error) => error instanceof ProjectFileError && error.code === 'invalid-project',
+  );
+  assert.throws(
+    () => deserializeProject(JSON.stringify({ ...createEmptyProject(), schemaVersion: 999 })),
+    (error) => error instanceof ProjectFileError && error.code === 'unsupported-version',
+  );
+});
+
+test('project file round-trip preserves plan scale viewport panel ducts and manual locations', () => {
+  const electricalPanel = createElectricalPanel({ x: 20, y: 30 });
+  const apparatus = createApparatusInstance('plaque-cuisson', { x: 120, y: 160 }, []);
+  let project = addStudyRoom(addStudyLevel(createEmptyProject(), 'RDC'), 'level_001', 'Cuisine');
+  project = {
+    ...project,
+    drawing: {
+      ...project.drawing,
+      viewport: { x: 12, y: -8, scale: 1.75 },
+      metersPerPixel: 0.02,
+      scaleReference: {
+        start: { x: 0, y: 0 },
+        end: { x: 150, y: 0 },
+        realMeters: 3,
+      },
+    },
+    plans: [{
+      id: 'plan_001',
+      name: 'Plan RDC.png',
+      source: 'data:image/png;base64,ZmFrZS1wbGFu',
+      visible: false,
+      locked: true,
+      opacity: 0.42,
+      rotation: 90,
+      mimeType: 'image/png',
+      width: 1024,
+      height: 768,
+      importedAt: '2026-08-31T10:00:00.000Z',
+    }],
+    electricalPanel: {
+      ...electricalPanel,
+      x: 20,
+      y: 30,
+      rotation: 15,
+      rows: 4,
+      reserveModules: 8,
+    },
+    apparatus: [apparatus],
+    activeLevelId: 'level_001',
+  };
+  project = setManualApparatusLocation(project, apparatus.id, 'level_001', 'room_001');
+  const duct = createDirectPanelDuct(project, electricalPanel.id, apparatus.id);
+  if (!duct.ok) {
+    assert.fail(duct.reason);
+  }
+  project = { ...project, ducts: [duct.duct] };
+
+  const restored = deserializeProject(serializeProject(project));
+
+  assert.equal(restored.plans[0].source, 'data:image/png;base64,ZmFrZS1wbGFu');
+  assert.equal(restored.plans[0].visible, false);
+  assert.equal(restored.plans[0].locked, true);
+  assert.equal(restored.plans[0].opacity, 0.42);
+  assert.equal(restored.plans[0].rotation, 90);
+  assert.equal(restored.drawing.viewport.scale, 1.75);
+  assert.equal(restored.drawing.metersPerPixel, 0.02);
+  assert.equal(restored.drawing.scaleReference?.realMeters, 3);
+  assert.equal(restored.electricalPanel?.x, 20);
+  assert.equal(restored.electricalPanel?.rows, 4);
+  assert.equal(restored.electricalPanel?.reserveModules, 8);
+  assert.equal(restored.apparatus[0].levelId, 'level_001');
+  assert.equal(restored.apparatus[0].roomId, 'room_001');
+  assert.equal(restored.ducts[0].id, duct.duct.id);
+});
+
+test('project file round-trip preserves study groups octopuses port assignments and ids', () => {
+  const pr1 = {
+    ...createApparatusInstance('prise-16a', { x: 10, y: 20 }, []),
+    identifier: 'PR1',
+    importContext: {
+      source: 'CDEF' as const,
+      importedAt: '2026-08-31T10:00:00.000Z',
+      levelName: '0 : RDC',
+      roomName: 'Cuisine',
+      roomProfile: 'CUISINE',
+      metricKey: 'prises',
+    },
+  };
+  const pr2 = {
+    ...createApparatusInstance('prise-16a', { x: 30, y: 20 }, [pr1]),
+    identifier: 'PR2',
+    importContext: pr1.importContext,
+  };
+  const sp1 = {
+    ...createApparatusInstance('prise-16a', { x: 50, y: 20 }, [pr1, pr2]),
+    identifier: 'SP1',
+    importContext: {
+      ...pr1.importContext,
+      roomName: 'Salon',
+      roomProfile: 'SALON',
+      metricKey: 'prises_spec',
+    },
+  };
+  const manual = createApparatusInstance('prise-rj45', { x: 70, y: 20 }, [pr1, pr2, sp1]);
+  const octopus = createOctopus('kitchen', { x: 100, y: 120 }, []);
+  const study = createImportedStudy([pr1, pr2, sp1], [octopus]);
+  if (!study) {
+    assert.fail('Study should be created');
+  }
+  let project: CpreyDrawProject = {
+    ...createEmptyProject(),
+    apparatus: [manual],
+    octopuses: [octopus],
+    study: {
+      ...study,
+      devices: study.devices.map((device) => ({ ...device, drawingObjectId: undefined, status: 'unplaced' as const })),
+    },
+    activeLevelId: study.levels[0].id,
+  };
+  const cuisineId = study.levels[0].rooms.find((room) => room.name === 'Cuisine')?.id ?? '';
+  project = addStudyRoom(project, study.levels[0].id, 'Cellier');
+  project = configureStudyPhysicalRepresentation(project, ['device_001', 'device_002'], 'prise_double');
+  const placedGroup = createApparatusInstance('prise_double', { x: 15, y: 25 }, [manual]);
+  project = {
+    ...project,
+    apparatus: [
+      ...project.apparatus,
+      {
+        ...placedGroup,
+        studyDeviceIds: ['device_001', 'device_002'],
+      },
+    ],
+  };
+  project = markStudyDevicesPlaced(project, ['device_001', 'device_002'], placedGroup.id);
+  project = setStudyOctopusInstallation(project, octopus.id, study.levels[0].id, 'room_003');
+  project = setStudyOctopusServedRooms(project, octopus.id, [cuisineId]);
+  project = setStudyOctopusMounting(project, octopus.id, 'wall', 1.8);
+  project = assignStudyDeviceToOctopusPort(project, octopus.id, 5, 'device_001');
+  project = assignStudyDeviceToOctopusPort(project, octopus.id, 6, 'device_002');
+  project = setManualApparatusLocation(project, manual.id, study.levels[0].id, cuisineId);
+
+  const restored = deserializeProject(serializeProject(project));
+
+  assert.equal(restored.activeLevelId, study.levels[0].id);
+  assert.equal(restored.study?.levels[0].id, study.levels[0].id);
+  assert.equal(restored.study?.levels[0].rooms.find((room) => room.name === 'Cuisine')?.id, cuisineId);
+  assert.equal(restored.study?.devices.find((device) => device.id === 'device_001')?.physicalGroupId, 'physical_group_001');
+  assert.equal(restored.study?.devices.find((device) => device.id === 'device_002')?.physicalGroupId, 'physical_group_001');
+  assert.equal(restored.study?.physicalGroups?.[0].drawingCatalogId, 'prise_double');
+  assert.equal(restored.study?.physicalGroups?.[0].drawingObjectId, placedGroup.id);
+  assert.deepEqual(restored.apparatus.find((item) => item.id === placedGroup.id)?.studyDeviceIds, ['device_001', 'device_002']);
+  assert.equal(restored.study?.octopuses?.[0].installationRoomId, 'room_003');
+  assert.deepEqual(restored.study?.octopuses?.[0].servedRoomIds, [cuisineId]);
+  assert.equal(restored.study?.octopuses?.[0].installationMode, 'wall');
+  assert.equal(restored.study?.octopuses?.[0].installationHeightM, 1.8);
+  assert.deepEqual(
+    restored.study?.portAssignments?.map((assignment) => [assignment.studyDeviceId, assignment.portNumber]),
+    [['device_001', 5], ['device_002', 6]],
+  );
+  assert.equal(restored.apparatus.find((item) => item.id === manual.id)?.roomId, cuisineId);
+});
+
+test('normalizes invalid activeLevelId from a project file to the first available level', () => {
+  const project = addStudyLevel(createEmptyProject(), 'RDC');
+  const restored = deserializeProject(serializeProject({
+    ...project,
+    activeLevelId: 'missing_level',
+  }));
+
+  assert.equal(restored.activeLevelId, 'level_001');
+});
+
+test('autosave round-trip preserves octopus wall mounting', () => {
+  const storage = installMemoryStorage();
+  const octopus = createOctopus('kitchen', { x: 10, y: 20 }, []);
+  const project = setStudyOctopusMounting(
+    { ...createEmptyProject(), octopuses: [octopus] },
+    octopus.id,
+    'wall',
+    1.8,
+  );
+
+  ProjectStorage.save(project);
+  const restored = ProjectStorage.load();
+
+  assert.equal(storage.size, 1);
+  assert.equal(restored.study?.octopuses?.[0].installationMode, 'wall');
+  assert.equal(restored.study?.octopuses?.[0].installationHeightM, 1.8);
+});
+
+test('legacy study octopuses without mounting behave as standard after project file load', () => {
+  const octopus = createOctopus('comfort', { x: 10, y: 20 }, []);
+  const rawProject = serializeProject({
+    ...createEmptyProject(),
+    octopuses: [octopus],
+    study: {
+      levels: [],
+      devices: [],
+      octopuses: [{ octopusId: octopus.id, servedRoomIds: [] }],
+    },
+  });
+
+  const restored = deserializeProject(rawProject);
+
+  assert.equal(restored.study?.octopuses?.[0].installationMode, undefined);
+  assert.equal(restored.study?.octopuses?.[0].installationHeightM, undefined);
+});
+
+test('invalid octopus wall mounting from a project file is normalized to standard', () => {
+  const octopus = createOctopus('comfort', { x: 10, y: 20 }, []);
+  const rawProject = JSON.stringify({
+    ...createEmptyProject(),
+    octopuses: [octopus],
+    study: {
+      levels: [],
+      devices: [],
+      octopuses: [{ octopusId: octopus.id, servedRoomIds: [], installationMode: 'wall', installationHeightM: -1 }],
+    },
+  });
+
+  const restored = deserializeProject(rawProject);
+
+  assert.equal(restored.study?.octopuses?.[0].installationMode, undefined);
+  assert.equal(restored.study?.octopuses?.[0].installationHeightM, undefined);
 });

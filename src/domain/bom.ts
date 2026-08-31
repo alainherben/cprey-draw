@@ -2,11 +2,11 @@ import { getApparatusCatalogItem } from '../catalog/apparatus';
 import { getOctopusCatalogModel } from '../catalog/octopuses';
 import {
   calculateDuctLengthStatus,
-  calculateDuctUsedLengthMeters,
   getDuctPathPoints,
   getIncomingDuctForApparatus,
 } from './ducts';
 import { getEffectiveOctopusOutputs } from './octopusOutputs';
+import { calculateDuctLengthBreakdownFromPoints } from './technicalSettings';
 import type {
   ApparatusCatalogId,
   ApparatusInstance,
@@ -229,7 +229,7 @@ function buildDuctItem(project: CpreyDrawProject, duct: Duct): NomenclatureDuctI
     project.electricalPanel,
     project.drawing.metersPerPixel,
   );
-  const usedLengthMeters = calculateDuctUsedLengthMeters(pathPoints, project.drawing.metersPerPixel, duct.controls);
+  const usedLengthMeters = calculateDuctLengthBreakdownFromPoints(project, duct, pathPoints, duct.controls).total;
   const availableLengthMeters = duct.specification.availableLengthMeters > 0
     ? duct.specification.availableLengthMeters
     : null;

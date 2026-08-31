@@ -8,6 +8,7 @@ import type {
   DuctEndpoint,
   ImportedStudy,
   Octopus,
+  OctopusInstallationMode,
   OctopusPortAssignment,
   OctopusPortAssignmentSource,
   StudyDevice,
@@ -29,6 +30,16 @@ export interface StudyProgress {
   total: number;
   placed: number;
   unplaced: number;
+}
+
+export interface StudyOctopusInstallationInput {
+  installationMode?: OctopusInstallationMode;
+  installationHeightM?: number;
+}
+
+export interface StudyOctopusInstallationValidation {
+  ok: boolean;
+  reason?: string;
 }
 
 export interface RoomStudyProgress extends StudyProgress {
@@ -160,6 +171,325 @@ export function createImportedStudy(
   };
 }
 
+export function normalizeLocationName(name: string): string {
+  return normalizeKey(name);
+}
+
+export function createEmptyImportedStudy(): ImportedStudy {
+  return {
+    levels: [],
+    devices: [],
+  };
+}
+
+export function addStudyLevel(project: CpreyDrawProject, rawName: string): CpreyDrawProject {
+  const name = normalizeEditableLocationName(rawName, 'Le nom du niveau est obligatoire.');
+  const study = project.study ?? createEmptyImportedStudy();
+  if (findStudyLevelByNormalizedName(study, name)) {
+    throw new Error(`Le niveau "${name}" existe déjà.`);
+  }
+
+  const level: StudyLevel = {
+    id: nextLevelId(getNextLevelIndex(study.levels)),
+    name,
+    rooms: [],
+  };
+
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels: [...study.levels, level],
+    },
+    activeLevelId: project.activeLevelId ?? level.id,
+  };
+}
+
+export function renameStudyLevel(project: CpreyDrawProject, levelId: string, rawName: string): CpreyDrawProject {
+  const study = ensureProjectStudy(project);
+  const name = normalizeEditableLocationName(rawName, 'Le nom du niveau est obligatoire.');
+  const level = study.levels.find((candidate) => candidate.id === levelId);
+  if (!level) {
+    throw new Error('Niveau introuvable.');
+  }
+  const duplicate = findStudyLevelByNormalizedName(study, name);
+  if (duplicate && duplicate.id !== levelId) {
+    throw new Error(`Le niveau "${name}" existe déjà.`);
+  }
+
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels: study.levels.map((candidate) =>
+        candidate.id === levelId ? { ...candidate, name } : candidate,
+      ),
+    },
+  };
+}
+
+export function removeStudyLevel(project: CpreyDrawProject, levelId: string): CpreyDrawProject {
+  const study = ensureProjectStudy(project);
+  const removal = canRemoveStudyLevel(project, levelId);
+  if (!removal.ok) {
+    throw new Error(removal.reason);
+  }
+
+  const levels = study.levels.filter((level) => level.id !== levelId);
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels,
+    },
+    activeLevelId: project.activeLevelId === levelId ? levels[0]?.id : project.activeLevelId,
+  };
+}
+
+export function addStudyRoom(project: CpreyDrawProject, levelId: string, rawName: string): CpreyDrawProject {
+  const study = ensureProjectStudy(project);
+  const name = normalizeEditableLocationName(rawName, 'Le nom de la pièce est obligatoire.');
+  const level = study.levels.find((candidate) => candidate.id === levelId);
+  if (!level) {
+    throw new Error('Niveau introuvable.');
+  }
+  if (findStudyRoomByNormalizedName(study, levelId, name)) {
+    throw new Error(`La pièce "${name}" existe déjà dans ce niveau.`);
+  }
+
+  const room: StudyRoom = {
+    id: nextRoomId(getNextRoomIndex(study.levels)),
+    levelId,
+    name,
+  };
+
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels: study.levels.map((candidate) =>
+        candidate.id === levelId
+          ? { ...candidate, rooms: [...candidate.rooms, room] }
+          : candidate,
+      ),
+    },
+  };
+}
+
+export function renameStudyRoom(project: CpreyDrawProject, roomId: string, rawName: string): CpreyDrawProject {
+  const study = ensureProjectStudy(project);
+  const name = normalizeEditableLocationName(rawName, 'Le nom de la pièce est obligatoire.');
+  const room = findStudyRoom(study, roomId);
+  if (!room) {
+    throw new Error('Pièce introuvable.');
+  }
+  const duplicate = findStudyRoomByNormalizedName(study, room.levelId, name);
+  if (duplicate && duplicate.id !== roomId) {
+    throw new Error(`La pièce "${name}" existe déjà dans ce niveau.`);
+  }
+
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels: study.levels.map((level) => ({
+        ...level,
+        rooms: level.rooms.map((candidate) =>
+          candidate.id === roomId ? { ...candidate, name } : candidate,
+        ),
+      })),
+    },
+  };
+}
+
+export function removeStudyRoom(project: CpreyDrawProject, roomId: string): CpreyDrawProject {
+  const study = ensureProjectStudy(project);
+  const removal = canRemoveStudyRoom(project, roomId);
+  if (!removal.ok) {
+    throw new Error(removal.reason);
+  }
+
+  return {
+    ...project,
+    study: {
+      ...study,
+      levels: study.levels.map((level) => ({
+        ...level,
+        rooms: level.rooms.filter((room) => room.id !== roomId),
+      })),
+    },
+  };
+}
+
+export function setManualApparatusLocation(
+  project: CpreyDrawProject,
+  apparatusId: string,
+  levelId: string | undefined,
+  roomId: string | undefined,
+): CpreyDrawProject {
+  const apparatus = project.apparatus.find((candidate) => candidate.id === apparatusId);
+  if (!apparatus) {
+    throw new Error('Appareillage introuvable.');
+  }
+  if (getStudyDevicesForDrawingObject(project.study, apparatusId).length > 0 || (apparatus.studyDeviceIds?.length ?? 0) > 0) {
+    throw new Error("La localisation d'un appareillage configurateur vient de l'étude.");
+  }
+
+  const study = project.study;
+  const level = levelId && study ? study.levels.find((candidate) => candidate.id === levelId) : undefined;
+  if (levelId && !level) {
+    throw new Error('Niveau introuvable.');
+  }
+  const room = roomId && study ? findStudyRoom(study, roomId) : undefined;
+  if (roomId && !room) {
+    throw new Error('Pièce introuvable.');
+  }
+  if (room && levelId && room.levelId !== levelId) {
+    throw new Error('La pièce doit appartenir au niveau choisi.');
+  }
+
+  return {
+    ...project,
+    apparatus: project.apparatus.map((candidate) =>
+      candidate.id === apparatusId
+        ? {
+            ...candidate,
+            levelId: room?.levelId ?? levelId,
+            roomId,
+          }
+        : candidate,
+    ),
+  };
+}
+
+export function canRemoveStudyLevel(
+  project: CpreyDrawProject,
+  levelId: string,
+): { ok: true } | { ok: false; reason: string } {
+  const level = project.study?.levels.find((candidate) => candidate.id === levelId);
+  if (!level) {
+    return { ok: false, reason: 'Niveau introuvable.' };
+  }
+  const devices = project.study?.devices.filter((device) => device.levelId === levelId).length ?? 0;
+  const octopuses = project.study?.octopuses?.filter((octopus) => octopus.installationLevelId === levelId).length ?? 0;
+  const apparatus = project.apparatus.filter((item) => item.levelId === levelId).length;
+  if (level.rooms.length > 0 || devices > 0 || octopuses > 0 || apparatus > 0) {
+    const details = [
+      level.rooms.length > 0 ? `${level.rooms.length} pièce${level.rooms.length > 1 ? 's' : ''}` : '',
+      devices > 0 ? `${devices} appareillage${devices > 1 ? 's' : ''}` : '',
+      octopuses > 0 ? `${octopuses} pieuvre${octopuses > 1 ? 's' : ''}` : '',
+      apparatus > 0 ? `${apparatus} objet${apparatus > 1 ? 's' : ''} manuel${apparatus > 1 ? 's' : ''}` : '',
+    ].filter(Boolean).join(', ');
+    return { ok: false, reason: `Impossible de supprimer le niveau "${level.name}" : ${details}.` };
+  }
+
+  return { ok: true };
+}
+
+export function canRemoveStudyRoom(
+  project: CpreyDrawProject,
+  roomId: string,
+): { ok: true } | { ok: false; reason: string } {
+  const room = findStudyRoom(project.study, roomId);
+  if (!room) {
+    return { ok: false, reason: 'Pièce introuvable.' };
+  }
+  const devices = project.study?.devices.filter((device) => device.roomId === roomId).length ?? 0;
+  const installationOctopuses = project.study?.octopuses?.filter((octopus) => octopus.installationRoomId === roomId).length ?? 0;
+  const servedOctopuses = project.study?.octopuses?.filter((octopus) => octopus.servedRoomIds?.includes(roomId)).length ?? 0;
+  const apparatus = project.apparatus.filter((item) => item.roomId === roomId).length;
+  if (devices > 0 || installationOctopuses > 0 || servedOctopuses > 0 || apparatus > 0) {
+    return { ok: false, reason: `Impossible de supprimer "${room.name}" : cette pièce est encore utilisée dans le projet.` };
+  }
+
+  return { ok: true };
+}
+
+export function findStudyLevelByNormalizedName(
+  study: ImportedStudy | undefined,
+  name: string,
+): StudyLevel | undefined {
+  const normalized = normalizeLocationName(name);
+  return study?.levels.find((level) => normalizeLocationName(level.name) === normalized);
+}
+
+export function findStudyRoomByNormalizedName(
+  study: ImportedStudy | undefined,
+  levelId: string,
+  name: string,
+): StudyRoom | undefined {
+  const normalized = normalizeLocationName(name);
+  return study?.levels
+    .find((level) => level.id === levelId)
+    ?.rooms.find((room) => normalizeLocationName(room.name) === normalized);
+}
+
+export function mergeImportedStudyReference(
+  baseStudy: ImportedStudy | undefined,
+  importedStudy: ImportedStudy | undefined,
+): ImportedStudy | undefined {
+  if (!baseStudy || baseStudy.levels.length === 0 || !importedStudy) {
+    return importedStudy;
+  }
+
+  const levels = baseStudy.levels.map((level) => ({
+    ...level,
+    rooms: level.rooms.map((room) => ({ ...room })),
+  }));
+  const levelIdMap = new Map<string, string>();
+  const roomIdMap = new Map<string, string>();
+  let nextLevelIndex = getNextLevelIndex(levels);
+  let nextRoomIndex = getNextRoomIndex(levels);
+
+  for (const importedLevel of importedStudy.levels) {
+    let level = findStudyLevelByNormalizedName({ levels, devices: [] }, importedLevel.name);
+    if (!level) {
+      level = {
+        id: nextLevelId(nextLevelIndex++),
+        code: importedLevel.code,
+        name: importedLevel.name,
+        rooms: [],
+      };
+      levels.push(level);
+    }
+    levelIdMap.set(importedLevel.id, level.id);
+
+    for (const importedRoom of importedLevel.rooms) {
+      let room = findStudyRoomByNormalizedName({ levels, devices: [] }, level.id, importedRoom.name);
+      if (!room) {
+        room = {
+          id: nextRoomId(nextRoomIndex++),
+          levelId: level.id,
+          name: importedRoom.name,
+          profile: importedRoom.profile,
+        };
+        level.rooms.push(room);
+      }
+      roomIdMap.set(importedRoom.id, room.id);
+    }
+  }
+
+  return {
+    ...importedStudy,
+    levels,
+    devices: importedStudy.devices.map((device) => ({
+      ...device,
+      levelId: device.levelId ? levelIdMap.get(device.levelId) ?? device.levelId : undefined,
+      roomId: device.roomId ? roomIdMap.get(device.roomId) ?? device.roomId : undefined,
+    })),
+    octopuses: importedStudy.octopuses?.map((octopus) => ({
+      ...octopus,
+      installationLevelId: octopus.installationLevelId
+        ? levelIdMap.get(octopus.installationLevelId) ?? octopus.installationLevelId
+        : undefined,
+      installationRoomId: octopus.installationRoomId
+        ? roomIdMap.get(octopus.installationRoomId) ?? octopus.installationRoomId
+        : undefined,
+      servedRoomIds: octopus.servedRoomIds?.map((roomId) => roomIdMap.get(roomId) ?? roomId),
+    })),
+  };
+}
+
 export function normalizeImportedStudy(study: ImportedStudy | undefined): ImportedStudy | undefined {
   if (!study || !Array.isArray(study.levels) || !Array.isArray(study.devices)) {
     return undefined;
@@ -256,6 +586,7 @@ export function normalizeImportedStudy(study: ImportedStudy | undefined): Import
             servedRoomIds: Array.isArray(octopus.servedRoomIds)
               ? Array.from(new Set(octopus.servedRoomIds.filter((roomId) => roomIds.has(roomId))))
               : [],
+            ...normalizeStudyOctopusMounting(octopus),
           }))
       : []),
     ...Array.from(octopusIdsFromDevices)
@@ -295,14 +626,16 @@ export function normalizeImportedStudy(study: ImportedStudy | undefined): Import
         }))
     : [];
 
-  return levels.length > 0 || normalizedDevices.length > 0
+  const normalizedPortAssignments = portAssignments.filter((assignment) => studyOctopusIds.has(assignment.octopusId));
+
+  return levels.length > 0 || normalizedDevices.length > 0 || normalizedOctopuses.length > 0
     ? {
         levels,
         devices: normalizedDevices,
         physicalGroups: physicalGroups.length > 0 ? physicalGroups : undefined,
         octopuses: normalizedOctopuses.length > 0 ? normalizedOctopuses : undefined,
-        portAssignments: portAssignments.filter((assignment) => studyOctopusIds.has(assignment.octopusId)).length > 0
-          ? portAssignments.filter((assignment) => studyOctopusIds.has(assignment.octopusId))
+        portAssignments: normalizedPortAssignments.length > 0
+          ? normalizedPortAssignments
           : undefined,
       }
     : undefined;
@@ -647,6 +980,51 @@ export function getStudyOctopus(
   return study.octopuses?.find((octopus) => octopus.octopusId === octopusId);
 }
 
+export function getStudyOctopusInstallationMode(
+  study: ImportedStudy | undefined,
+  octopusId: string | undefined,
+): OctopusInstallationMode {
+  const mode = getStudyOctopus(study, octopusId)?.installationMode;
+  return mode === 'wall' ? 'wall' : 'standard';
+}
+
+export function getStudyOctopusInstallationHeight(
+  study: ImportedStudy | undefined,
+  octopusId: string | undefined,
+): number | undefined {
+  const octopus = getStudyOctopus(study, octopusId);
+  return octopus?.installationMode === 'wall' && isValidWallInstallationHeight(octopus.installationHeightM)
+    ? octopus.installationHeightM
+    : undefined;
+}
+
+export function parseMetricInput(value: string): number | undefined {
+  const normalizedValue = value.trim().replace(',', '.');
+  if (normalizedValue === '') {
+    return undefined;
+  }
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) ? parsedValue : undefined;
+}
+
+export function validateStudyOctopusInstallation(
+  input: StudyOctopusInstallationInput,
+): StudyOctopusInstallationValidation {
+  const mode = input.installationMode === 'wall' ? 'wall' : 'standard';
+  if (mode === 'standard') {
+    return { ok: true };
+  }
+
+  if (!isValidWallInstallationHeight(input.installationHeightM)) {
+    return {
+      ok: false,
+      reason: 'La hauteur murale doit être strictement positive.',
+    };
+  }
+
+  return { ok: true };
+}
+
 export function getOctopusPortAssignments(
   study: ImportedStudy | undefined,
   octopusId: string | undefined,
@@ -693,18 +1071,18 @@ export function setStudyOctopusInstallation(
   installationLevelId: string | undefined,
   installationRoomId: string | undefined,
 ): CpreyDrawProject {
-  if (!project.study) {
-    return project;
-  }
   ensureProjectOctopus(project, octopusId);
+  const projectWithStudy: CpreyDrawProject & { study: ImportedStudy } = project.study
+    ? { ...project, study: project.study }
+    : { ...project, study: createEmptyImportedStudy() };
 
   const level = installationLevelId
-    ? project.study.levels.find((candidate) => candidate.id === installationLevelId)
+    ? projectWithStudy.study.levels.find((candidate) => candidate.id === installationLevelId)
     : undefined;
   if (installationLevelId && !level) {
     throw new Error('Niveau d’installation introuvable.');
   }
-  const room = installationRoomId ? findStudyRoom(project.study, installationRoomId) : undefined;
+  const room = installationRoomId ? findStudyRoom(projectWithStudy.study, installationRoomId) : undefined;
   if (installationRoomId && !room) {
     throw new Error('Pièce d’installation introuvable.');
   }
@@ -712,7 +1090,7 @@ export function setStudyOctopusInstallation(
     throw new Error("La pièce d'installation doit appartenir au niveau choisi.");
   }
 
-  return updateStudyOctopus(project, octopusId, {
+  return updateStudyOctopus(projectWithStudy, octopusId, {
     installationLevelId,
     installationRoomId,
   });
@@ -723,24 +1101,54 @@ export function setStudyOctopusServedRooms(
   octopusId: string,
   servedRoomIds: string[],
 ): CpreyDrawProject {
-  if (!project.study) {
-    return project;
-  }
   ensureProjectOctopus(project, octopusId);
-  const normalizedRoomIds = Array.from(new Set(servedRoomIds)).filter((roomId) => findStudyRoom(project.study, roomId));
-  const removedRoomIds = new Set((getStudyOctopus(project.study, octopusId)?.servedRoomIds ?? [])
+  const projectWithStudy: CpreyDrawProject & { study: ImportedStudy } = project.study
+    ? { ...project, study: project.study }
+    : { ...project, study: createEmptyImportedStudy() };
+  const normalizedRoomIds = Array.from(new Set(servedRoomIds)).filter((roomId) => findStudyRoom(projectWithStudy.study, roomId));
+  const removedRoomIds = new Set((getStudyOctopus(projectWithStudy.study, octopusId)?.servedRoomIds ?? [])
     .filter((roomId) => !normalizedRoomIds.includes(roomId)));
-  const blockingAssignments = getOctopusPortAssignments(project.study, octopusId)
+  const blockingAssignments = getOctopusPortAssignments(projectWithStudy.study, octopusId)
     .filter((assignment) => {
-      const device = project.study?.devices.find((candidate) => candidate.id === assignment.studyDeviceId);
+      const device = projectWithStudy.study?.devices.find((candidate) => candidate.id === assignment.studyDeviceId);
       return device?.roomId ? removedRoomIds.has(device.roomId) : false;
     });
   if (blockingAssignments.length > 0) {
     throw new Error('Impossible de retirer cette pièce : des sorties de la pieuvre sont encore affectées à ses équipements.');
   }
 
-  return updateStudyOctopus(project, octopusId, {
+  return updateStudyOctopus(projectWithStudy, octopusId, {
     servedRoomIds: normalizedRoomIds,
+  });
+}
+
+export function setStudyOctopusMounting(
+  project: CpreyDrawProject,
+  octopusId: string,
+  installationMode: OctopusInstallationMode,
+  installationHeightM?: number,
+): CpreyDrawProject {
+  ensureProjectOctopus(project, octopusId);
+  const validation = validateStudyOctopusInstallation({ installationMode, installationHeightM });
+  if (!validation.ok) {
+    throw new Error(validation.reason ?? 'Installation de pieuvre invalide.');
+  }
+
+  const projectWithStudy: CpreyDrawProject & { study: ImportedStudy } = project.study
+    ? { ...project, study: project.study }
+    : { ...project, study: createEmptyImportedStudy() };
+
+  if (installationMode === 'standard') {
+    return updateStudyOctopus(projectWithStudy, octopusId, {
+      installationMode: undefined,
+      installationHeightM: undefined,
+    });
+  }
+
+  // La hauteur est locale au sol fini du niveau d'installation, pas une altitude absolue du bâtiment.
+  return updateStudyOctopus(projectWithStudy, octopusId, {
+    installationMode: 'wall',
+    installationHeightM,
   });
 }
 
@@ -878,7 +1286,7 @@ export function shouldDisplayApparatusForActiveLevel(
   project: CpreyDrawProject,
   apparatus: ApparatusInstance,
 ): boolean {
-  return shouldDisplayDrawingObjectForActiveLevel(project, apparatus.id, apparatus.importContext);
+  return shouldDisplayDrawingObjectForActiveLevel(project, apparatus.id, apparatus.importContext, apparatus.levelId);
 }
 
 export function shouldDisplayOctopusForActiveLevel(project: CpreyDrawProject, octopus: Octopus): boolean {
@@ -902,12 +1310,14 @@ function shouldDisplayDrawingObjectForActiveLevel(
   project: CpreyDrawProject,
   drawingObjectId: string,
   importContext: CdefImportContext | undefined,
+  manualLevelId?: string,
 ): boolean {
   if (!project.study || !project.activeLevelId) {
     return true;
   }
 
   const levelId = getStudyLevelIdForDrawingObject(project, drawingObjectId) ??
+    manualLevelId ??
     getStudyLevelIdFromImportContext(project.study, importContext);
 
   return levelId ? levelId === project.activeLevelId : true;
@@ -917,6 +1327,7 @@ function getEndpointLevelId(project: CpreyDrawProject, endpoint: DuctEndpoint): 
   if (endpoint.type === 'apparatus') {
     const apparatus = project.apparatus.find((item) => item.id === endpoint.id);
     return getStudyLevelIdForDrawingObject(project, endpoint.id) ??
+      apparatus?.levelId ??
       getStudyLevelIdFromImportContext(project.study, apparatus?.importContext);
   }
 
@@ -1026,6 +1437,15 @@ function normalizeKey(value: string): string {
   return removeAccents(value).trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+function normalizeEditableLocationName(value: string, emptyMessage: string): string {
+  const name = value.trim().replace(/\s+/g, ' ');
+  if (!name) {
+    throw new Error(emptyMessage);
+  }
+
+  return name;
+}
+
 function removeAccents(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
@@ -1036,6 +1456,20 @@ function nextLevelId(index: number): string {
 
 function nextRoomId(index: number): string {
   return `room_${String(index + 1).padStart(3, '0')}`;
+}
+
+function getNextLevelIndex(levels: StudyLevel[]): number {
+  return levels.reduce((maxIndex, level) => {
+    const match = level.id.match(/^level_(\d+)$/);
+    return match ? Math.max(maxIndex, Number(match[1])) : maxIndex;
+  }, 0);
+}
+
+function getNextRoomIndex(levels: StudyLevel[]): number {
+  return levels.flatMap((level) => level.rooms).reduce((maxIndex, room) => {
+    const match = room.id.match(/^room_(\d+)$/);
+    return match ? Math.max(maxIndex, Number(match[1])) : maxIndex;
+  }, 0);
 }
 
 function nextDeviceId(index: number): string {
@@ -1083,6 +1517,7 @@ function dedupeStudyOctopuses(octopuses: StudyOctopus[]): StudyOctopus[] {
       installationLevelId: octopus.installationLevelId,
       installationRoomId: octopus.installationRoomId,
       servedRoomIds: Array.from(new Set(octopus.servedRoomIds ?? [])),
+      ...normalizeStudyOctopusMounting(octopus),
     });
   }
 
@@ -1119,6 +1554,14 @@ function ensureValidPortNumber(portNumber: number): void {
   }
 }
 
+function ensureProjectStudy(project: CpreyDrawProject): ImportedStudy {
+  if (!project.study) {
+    throw new Error('Aucun référentiel niveaux/pièces.');
+  }
+
+  return project.study;
+}
+
 function findStudyRoom(study: ImportedStudy | undefined, roomId: string | undefined): StudyRoom | undefined {
   if (!study || !roomId) {
     return undefined;
@@ -1137,7 +1580,12 @@ function ensureStudyOctopusEntry(study: ImportedStudy, octopusId: string): Study
 function updateStudyOctopus(
   project: CpreyDrawProject,
   octopusId: string,
-  updates: Partial<Pick<StudyOctopus, 'installationLevelId' | 'installationRoomId' | 'servedRoomIds'>>,
+  updates: Partial<
+    Pick<
+      StudyOctopus,
+      'installationLevelId' | 'installationRoomId' | 'servedRoomIds' | 'installationMode' | 'installationHeightM'
+    >
+  >,
 ): CpreyDrawProject {
   if (!project.study) {
     return project;
@@ -1160,6 +1608,20 @@ function updateStudyOctopus(
       ],
     },
   };
+}
+
+function normalizeStudyOctopusMounting(octopus: Partial<StudyOctopus>): StudyOctopusInstallationInput {
+  if (octopus.installationMode !== 'wall') {
+    return {};
+  }
+
+  return isValidWallInstallationHeight(octopus.installationHeightM)
+    ? { installationMode: 'wall', installationHeightM: octopus.installationHeightM }
+    : {};
+}
+
+function isValidWallInstallationHeight(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function isApparatusCatalogId(value: unknown): value is ApparatusCatalogId {

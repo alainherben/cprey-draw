@@ -1,12 +1,12 @@
 import { getApparatusCatalogItem } from '../catalog/apparatus';
 import {
   calculateDuctLengthStatus,
-  calculateDuctUsedLengthMeters,
   getDuctPathPoints,
   getExpectedApparatusType,
   isPowerSupplyOutputDestination,
 } from './ducts';
 import { getEffectiveOctopusOutput, getEffectiveOctopusOutputs, validateOctopusOutputOverride } from './octopusOutputs';
+import { calculateDuctLengthBreakdownFromPoints } from './technicalSettings';
 import type {
   ApparatusInstance,
   CpreyDrawProject,
@@ -466,7 +466,7 @@ function validateDuctLength(project: CpreyDrawProject, duct: Duct): ProjectIssue
     project.electricalPanel,
     project.drawing.metersPerPixel,
   );
-  const usedLengthMeters = calculateDuctUsedLengthMeters(pathPoints, project.drawing.metersPerPixel, duct.controls);
+  const usedLengthMeters = calculateDuctLengthBreakdownFromPoints(project, duct, pathPoints, duct.controls).total;
   const status = calculateDuctLengthStatus(duct.specification.availableLengthMeters, usedLengthMeters);
   return status.hasOverrun && status.usedLengthMeters !== null
     ? [issue({

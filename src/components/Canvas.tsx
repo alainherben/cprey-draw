@@ -7,9 +7,16 @@ import { NomenclaturePanel } from './NomenclaturePanel';
 import { ValidationPanel } from './ValidationPanel';
 import { PdfExportDialog } from './PdfExportDialog';
 import { SiteInformationPanel } from './SiteInformationPanel';
+import { TechnicalSettingsPanel } from './TechnicalSettingsPanel';
 import { ImportedStudyPanel } from './ImportedStudyPanel';
 import { getApparatusCatalogItem } from '../catalog/apparatus';
-import { ProjectStorage } from '../storage/ProjectStorage';
+import {
+  createSafeProjectFileName,
+  deserializeProject,
+  ProjectFileError,
+  ProjectStorage,
+  serializeProject,
+} from '../storage/ProjectStorage';
 import { CommandManager } from '../commands/CommandManager';
 import {
   createAddApparatusCommand,
@@ -45,9 +52,13 @@ import {
   createMoveDuctControlCommand,
   createMoveDuctWaypointCommand,
   createResetDuctControlCommand,
+  createUpdateDuctRouteModeCommand,
   createUpdateDuctSpecificationCommand,
 } from '../commands/connections/ConnectionCommands';
-import { createUpdateProjectMetadataCommand } from '../commands/project/ProjectMetadataCommands';
+import {
+  createUpdateProjectMetadataCommand,
+  createUpdateTechnicalSettingsCommand,
+} from '../commands/project/ProjectMetadataCommands';
 import { ProjectSnapshotCommand } from '../commands/ProjectSnapshotCommand';
 import {
   createApparatusInstance,
@@ -63,7 +74,6 @@ import {
   createDuctWaypoint,
   createDirectPanelDuct,
   calculateDuctLengthStatus,
-  calculateDuctUsedLengthMeters,
   getCircuitExpectedApparatusType,
   getIncomingDuctForApparatus,
   getDuctGeometry,
@@ -97,22 +107,32 @@ import {
 import { getEffectiveOctopusOutput } from '../domain/octopusOutputs';
 import { getObjectDisplayLevel, getOctopusDisplayLevel } from '../domain/display';
 import { buildProjectNomenclature } from '../domain/bom';
+import { calculateDuctLengthBreakdownFromPoints } from '../domain/technicalSettings';
 import { validateProject, type ProjectIssue } from '../domain/projectValidation';
 import { exportProjectPdf } from '../export/pdf/PdfExporter';
 import type { PdfExportOptions } from '../export/pdf/PdfTypes';
 import { importCdefProject } from '../import/CdefProjectImporter';
 import {
+  getStudyOctopus,
   shouldDisplayApparatusForActiveLevel,
   shouldDisplayDuctForActiveLevel,
   shouldDisplayOctopusForActiveLevel,
   type StudyPlacementTarget,
 } from '../domain/importedStudy';
 import {
+  createAddStudyLevelCommand,
+  createAddStudyRoomCommand,
   createAssignStudyDeviceToOctopusPortCommand,
   createConfigureStudyRepresentationCommand,
   createDissociateStudyGroupCommand,
   createMoveStudyDeviceOctopusPortAssignmentCommand,
+  createRemoveStudyLevelCommand,
+  createRemoveStudyRoomCommand,
+  createRenameStudyLevelCommand,
+  createRenameStudyRoomCommand,
+  createSetManualApparatusLocationCommand,
   createSetStudyOctopusInstallationCommand,
+  createSetStudyOctopusMountingCommand,
   createSetStudyOctopusServedRoomsCommand,
   createUnassignOctopusPortCommand,
 } from '../commands/study/StudyCommands';
@@ -124,15 +144,19 @@ import type {
   ConnectionTargetType,
   CpreyDrawProject,
   Duct,
+  DuctRouteMode,
   DuctSpecification,
   ElectricalPanel,
   Octopus,
+  OctopusInstallationMode,
   OctopusOutputOverride,
   OctopusModelId,
   Plan,
   ProjectStatus,
+  ProjectTechnicalSettings,
   Point,
   SiteInformation,
+  StudyOctopus,
   ToolMode,
   Viewport,
 } from '../types/project';
@@ -238,6 +262,27 @@ function readJsonFile(file: File): Promise<unknown> {
   });
 }
 
+function readTextFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+function downloadProjectFile(project: CpreyDrawProject, fileName: string): void {
+  const blob = new Blob([serializeProject(project)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 function useHtmlImage(dataUrl: string | null): HTMLImageElement | null {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
 
@@ -284,12 +329,15 @@ export function DrawingCanvas() {
   const [isValidationOpen, setIsValidationOpen] = useState(false);
   const [isImportedStudyOpen, setIsImportedStudyOpen] = useState(false);
   const [isSiteInformationOpen, setIsSiteInformationOpen] = useState(false);
+  const [isTechnicalSettingsOpen, setIsTechnicalSettingsOpen] = useState(false);
   const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
   const [isNewProjectConfirmationOpen, setIsNewProjectConfirmationOpen] = useState(false);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
   const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [pendingCdefImport, setPendingCdefImport] = useState<CdefImportResult | null>(null);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
+  const [currentProjectFileName, setCurrentProjectFileName] = useState<string | undefined>(undefined);
+  const [isDirty, setIsDirty] = useState(false);
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [, setHistoryRevision] = useState(0);
@@ -330,6 +378,7 @@ export function DrawingCanvas() {
     commandManagerRef.current = new CommandManager(
       (nextProject) => {
         setProject(nextProject);
+        setIsDirty(true);
         ProjectStorage.save(nextProject);
       },
       () => setHistoryRevision((revision) => revision + 1),
@@ -361,6 +410,7 @@ export function DrawingCanvas() {
     setIsValidationOpen(false);
     setIsImportedStudyOpen(false);
     setIsSiteInformationOpen(false);
+    setIsTechnicalSettingsOpen(false);
     setIsPdfExportOpen(false);
     setPdfExportError(null);
     setPendingCdefImport(null);
@@ -373,21 +423,73 @@ export function DrawingCanvas() {
     const nextProject = ProjectStorage.createNew();
     commandManager.clear();
     setProject(nextProject);
+    setCurrentProjectFileName(undefined);
+    setIsDirty(false);
     resetTransientProjectUi();
     setIsNewProjectConfirmationOpen(false);
     setSaveMessage('Nouveau projet créé');
   }, [commandManager, resetTransientProjectUi]);
 
   const requestNewProject = useCallback(() => {
-    if (isProjectNonEmpty(project)) {
+    if (isDirty || isProjectNonEmpty(project)) {
       setIsNewProjectConfirmationOpen(true);
       return;
     }
 
     createNewProject();
-  }, [createNewProject, project]);
+  }, [createNewProject, isDirty, project]);
+
+  const saveProjectFile = useCallback(() => {
+    const fileName = currentProjectFileName ?? createSafeProjectFileName(project.project.name);
+    downloadProjectFile(project, fileName);
+    ProjectStorage.save(project);
+    setCurrentProjectFileName(fileName);
+    setIsDirty(false);
+    setSaveMessage('Projet enregistré');
+  }, [currentProjectFileName, project]);
+
+  const saveProjectFileAs = useCallback(() => {
+    const proposedName = currentProjectFileName ?? createSafeProjectFileName(project.project.name);
+    const chosenName = window.prompt('Nom du fichier projet', proposedName);
+    if (chosenName === null) {
+      return;
+    }
+
+    const fileName = createSafeProjectFileName(chosenName);
+    downloadProjectFile(project, fileName);
+    ProjectStorage.save(project);
+    setCurrentProjectFileName(fileName);
+    setIsDirty(false);
+    setSaveMessage('Projet enregistré sous ' + fileName);
+  }, [currentProjectFileName, project]);
+
+  const openProjectFile = useCallback(async (file: File) => {
+    if (isDirty && !window.confirm('Le projet actuel contient des modifications non enregistrées.\nContinuer et ouvrir un autre projet ?')) {
+      return;
+    }
+
+    try {
+      const rawProject = await readTextFile(file);
+      const nextProject = deserializeProject(rawProject);
+      commandManager.clear();
+      ProjectStorage.save(nextProject);
+      setProject(nextProject);
+      setCurrentProjectFileName(createSafeProjectFileName(file.name));
+      setIsDirty(false);
+      resetTransientProjectUi();
+      setSaveMessage(`Projet "${file.name}" ouvert.`);
+    } catch (error) {
+      console.error(error);
+      if (error instanceof ProjectFileError && error.code === 'unsupported-version') {
+        window.alert('Impossible d’ouvrir ce projet :\nversion de fichier non prise en charge.');
+      } else {
+        window.alert('Impossible d’ouvrir le projet.\nLe fichier sélectionné n’est pas un projet CPREY DRAW valide.');
+      }
+    }
+  }, [commandManager, isDirty, resetTransientProjectUi]);
 
   const setViewport = useCallback((nextViewport: Viewport) => {
+    setIsDirty(true);
     setProject((current) => ({
       ...current,
       drawing: {
@@ -398,6 +500,7 @@ export function DrawingCanvas() {
   }, []);
 
   const updateDrawingState = useCallback((updates: Partial<CpreyDrawProject['drawing']>) => {
+    setIsDirty(true);
     setProject((current) => ({
       ...current,
       drawing: {
@@ -489,13 +592,25 @@ export function DrawingCanvas() {
     const handleKeyboardShortcut = (event: KeyboardEvent) => {
       const usesModifier = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
-      if (!usesModifier || (key !== 'z' && key !== 'n')) {
+      if (!usesModifier || (key !== 'z' && key !== 'n' && key !== 's' && key !== 'o')) {
         return;
       }
 
       event.preventDefault();
       if (key === 'n') {
         requestNewProject();
+        return;
+      }
+      if (key === 's') {
+        if (event.shiftKey) {
+          saveProjectFileAs();
+        } else {
+          saveProjectFile();
+        }
+        return;
+      }
+      if (key === 'o') {
+        document.getElementById('project-open-file-input')?.click();
         return;
       }
 
@@ -508,7 +623,7 @@ export function DrawingCanvas() {
 
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
-  }, [commandManager, requestNewProject]);
+  }, [commandManager, requestNewProject, saveProjectFile, saveProjectFileAs]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -678,6 +793,7 @@ export function DrawingCanvas() {
   }, [commandManager, pendingCdefImport, project, resetTransientProjectUi]);
 
   const changeActiveLevel = useCallback((levelId: string) => {
+    setIsDirty(true);
     setProject((currentProject) => {
       const nextProject = {
         ...currentProject,
@@ -750,6 +866,73 @@ export function DrawingCanvas() {
     setSelectedDuctControlId(null);
   }, [centerViewportOnPoint, project.apparatus, project.octopuses, project.study?.devices]);
 
+  const runStudyCommand = useCallback((factory: () => ProjectSnapshotCommand, fallbackMessage: string) => {
+    try {
+      commandManager.execute(factory());
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : fallbackMessage);
+    }
+  }, [commandManager]);
+
+  const addStudyLevelFromPanel = useCallback((name: string) => {
+    runStudyCommand(
+      () => createAddStudyLevelCommand(project, name, commandManager.setProject.bind(commandManager)),
+      'Impossible d’ajouter ce niveau.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const renameStudyLevelFromPanel = useCallback((levelId: string, name: string) => {
+    runStudyCommand(
+      () => createRenameStudyLevelCommand(project, levelId, name, commandManager.setProject.bind(commandManager)),
+      'Impossible de renommer ce niveau.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const removeStudyLevelFromPanel = useCallback((levelId: string) => {
+    runStudyCommand(
+      () => createRemoveStudyLevelCommand(project, levelId, commandManager.setProject.bind(commandManager)),
+      'Impossible de supprimer ce niveau.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const addStudyRoomFromPanel = useCallback((levelId: string, name: string) => {
+    runStudyCommand(
+      () => createAddStudyRoomCommand(project, levelId, name, commandManager.setProject.bind(commandManager)),
+      'Impossible d’ajouter cette pièce.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const renameStudyRoomFromPanel = useCallback((roomId: string, name: string) => {
+    runStudyCommand(
+      () => createRenameStudyRoomCommand(project, roomId, name, commandManager.setProject.bind(commandManager)),
+      'Impossible de renommer cette pièce.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const removeStudyRoomFromPanel = useCallback((roomId: string) => {
+    runStudyCommand(
+      () => createRemoveStudyRoomCommand(project, roomId, commandManager.setProject.bind(commandManager)),
+      'Impossible de supprimer cette pièce.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
+  const setManualApparatusLocation = useCallback((
+    apparatusId: string,
+    levelId: string | undefined,
+    roomId: string | undefined,
+  ) => {
+    runStudyCommand(
+      () => createSetManualApparatusLocationCommand(
+        project,
+        apparatusId,
+        levelId,
+        roomId,
+        commandManager.setProject.bind(commandManager),
+      ),
+      'Impossible de localiser cet appareillage.',
+    );
+  }, [commandManager, project, runStudyCommand]);
+
   const configureStudyRepresentation = useCallback((studyDeviceIds: string[], drawingCatalogId: ApparatusCatalogId) => {
     try {
       commandManager.execute(
@@ -816,6 +999,26 @@ export function DrawingCanvas() {
       );
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Impossible de modifier les pièces desservies.');
+    }
+  }, [commandManager, project]);
+
+  const setStudyOctopusMounting = useCallback((
+    octopusId: string,
+    installationMode: OctopusInstallationMode,
+    installationHeightM: number | undefined,
+  ) => {
+    try {
+      commandManager.execute(
+        createSetStudyOctopusMountingCommand(
+          project,
+          octopusId,
+          installationMode,
+          installationHeightM,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Impossible de modifier l'implantation.");
     }
   }, [commandManager, project]);
 
@@ -1485,6 +1688,20 @@ export function DrawingCanvas() {
     [commandManager, project],
   );
 
+  const updateDuctRouteMode = useCallback(
+    (ductId: string, routeMode: DuctRouteMode) => {
+      commandManager.execute(
+        createUpdateDuctRouteModeCommand(
+          project,
+          ductId,
+          routeMode,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+    },
+    [commandManager, project],
+  );
+
   const addDuctWaypoint = useCallback(
     (ductId: string, position: Point | null = null) => {
       const duct = project.ducts.find((currentDuct) => currentDuct.id === ductId);
@@ -1581,6 +1798,20 @@ export function DrawingCanvas() {
     [commandManager, project],
   );
 
+  const updateTechnicalSettings = useCallback(
+    (technicalSettings: ProjectTechnicalSettings) => {
+      commandManager.execute(
+        createUpdateTechnicalSettingsCommand(
+          project,
+          technicalSettings,
+          commandManager.setProject.bind(commandManager),
+        ),
+      );
+      setIsTechnicalSettingsOpen(false);
+    },
+    [commandManager, project],
+  );
+
   return (
     <div className="app-shell">
       <Toolbar
@@ -1608,13 +1839,16 @@ export function DrawingCanvas() {
         onToggleShowDuctLengths={() => updateDrawingState({ showDuctLengths: !project.drawing.showDuctLengths })}
         onToggleScaleMarkerVisible={() => updateDrawingState({ scaleMarkerVisible: !project.drawing.scaleMarkerVisible })}
         onToggleLayerVisible={(layerId, visible) => {
+          setIsDirty(true);
           setProject((currentProject) => setLayerVisible(currentProject, layerId, visible));
         }}
         onSaveProject={() => {
-          ProjectStorage.save(project);
-          setSaveMessage('Projet sauvegardé');
+          saveProjectFile();
         }}
+        onSaveProjectAs={saveProjectFileAs}
+        onOpenProjectFile={openProjectFile}
         onOpenSiteInformation={() => setIsSiteInformationOpen(true)}
+        onOpenTechnicalSettings={() => setIsTechnicalSettingsOpen(true)}
         onOpenNomenclature={() => setIsNomenclatureOpen(true)}
         onOpenValidation={() => setIsValidationOpen(true)}
         onOpenImportedStudy={() => setIsImportedStudyOpen(true)}
@@ -1725,6 +1959,19 @@ export function DrawingCanvas() {
           }
 
           updateActivePlan({ rotation }, 'Modifier la rotation du plan');
+        }}
+      />
+      <input
+        id="project-open-file-input"
+        type="file"
+        accept=".cpreydraw,.json,application/json"
+        className="visually-hidden-file-input"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (file) {
+            void openProjectFile(file);
+            event.currentTarget.value = '';
+          }
         }}
       />
 
@@ -1974,6 +2221,7 @@ export function DrawingCanvas() {
               <OctopusNode
                 key={octopus.id}
                 octopus={octopus}
+                studyOctopus={getStudyOctopus(project.study, octopus.id)}
                 effectivelyVisible={isOctopusEffectivelyVisible(project, octopus)}
                 logoImage={octopusLogoImages[octopus.modelId]}
                 metersPerPixel={project.drawing.metersPerPixel}
@@ -2141,6 +2389,7 @@ export function DrawingCanvas() {
         </Stage>
 
         <PropertiesPanel
+          project={project}
           selectedObject={isPropertiesPanelOpen ? selectedBusinessObject : null}
           selectedDuct={isPropertiesPanelOpen ? selectedDuct : null}
           selectedDuctControlId={selectedDuctControlId}
@@ -2159,10 +2408,12 @@ export function DrawingCanvas() {
           onResetOctopusOutputOverride={resetOctopusOutputOverride}
           onDeleteOctopus={deleteOctopus}
           onSetStudyOctopusInstallation={setStudyOctopusInstallation}
+          onSetStudyOctopusMounting={setStudyOctopusMounting}
           onSetStudyOctopusServedRooms={setStudyOctopusServedRooms}
           onAssignStudyDeviceToOctopusPort={assignStudyDeviceToOctopusPort}
           onUnassignOctopusPort={unassignStudyDeviceFromOctopusPort}
           onMoveStudyDeviceOctopusPortAssignment={moveStudyDeviceOctopusPortAssignment}
+          onSetManualApparatusLocation={setManualApparatusLocation}
           onUpdateApparatus={updateApparatus}
           onDeleteApparatus={deleteApparatus}
           onStartConnection={startConnection}
@@ -2171,6 +2422,7 @@ export function DrawingCanvas() {
           onAddDuctWaypoint={addDuctWaypoint}
           onResetDuctControl={resetDuctControl}
           onUpdateDuctSpecification={updateDuctSpecification}
+          onUpdateDuctRouteMode={updateDuctRouteMode}
           onDeleteDuct={deleteDuct}
         />
 
@@ -2189,13 +2441,20 @@ export function DrawingCanvas() {
           />
         )}
 
-        {isImportedStudyOpen && project.study && (
+        {isImportedStudyOpen && (
           <ImportedStudyPanel
             study={project.study}
             octopuses={project.octopuses}
             activeLevelId={project.activeLevelId}
             pendingPlacementDeviceId={pendingStudyDevicePlacement?.id}
             onClose={() => setIsImportedStudyOpen(false)}
+            onChangeActiveLevel={changeActiveLevel}
+            onAddLevel={addStudyLevelFromPanel}
+            onRenameLevel={renameStudyLevelFromPanel}
+            onRemoveLevel={removeStudyLevelFromPanel}
+            onAddRoom={addStudyRoomFromPanel}
+            onRenameRoom={renameStudyRoomFromPanel}
+            onRemoveRoom={removeStudyRoomFromPanel}
             onSelectTarget={selectStudyTarget}
             onConfigureRepresentation={configureStudyRepresentation}
             onDissociateGroup={dissociateStudyGroup}
@@ -2207,6 +2466,14 @@ export function DrawingCanvas() {
             project={project}
             onClose={() => setIsSiteInformationOpen(false)}
             onSave={updateProjectMetadata}
+          />
+        )}
+
+        {isTechnicalSettingsOpen && (
+          <TechnicalSettingsPanel
+            project={project}
+            onClose={() => setIsTechnicalSettingsOpen(false)}
+            onSave={updateTechnicalSettings}
           />
         )}
 
@@ -2274,9 +2541,9 @@ function NewProjectDialog({
           <h2 id="new-project-title">Nouveau projet</h2>
         </header>
         <p>
-          Le projet courant contient des données.
+          Le projet actuel contient des modifications non enregistrées.
           <br />
-          Créer un nouveau projet supprimera les modifications non sauvegardées de la session courante.
+          Créer un nouveau projet remplacera la session courante.
         </p>
         <footer>
           <button type="button" className="secondary-action" onClick={onCancel}>
@@ -2453,6 +2720,7 @@ interface ElectricalPanelNodeProps {
 
 interface OctopusNodeProps {
   octopus: Octopus;
+  studyOctopus: StudyOctopus | undefined;
   effectivelyVisible: boolean;
   logoImage: HTMLImageElement | null;
   metersPerPixel: number | null;
@@ -2466,6 +2734,7 @@ interface OctopusNodeProps {
 
 function OctopusNode({
   octopus,
+  studyOctopus,
   effectivelyVisible,
   logoImage,
   metersPerPixel,
@@ -2500,6 +2769,9 @@ function OctopusNode({
   const portRadius = Math.max(3 / viewportScale, Math.min(width, height) * 0.035);
   const selectionWidth = iconOnly ? iconFrameSize : width;
   const selectionHeight = iconOnly ? iconFrameSize : height;
+  const mountingLabel = studyOctopus?.installationMode === 'wall' && typeof studyOctopus.installationHeightM === 'number'
+    ? `Murale · H ${studyOctopus.installationHeightM.toFixed(2).replace('.', ',')} m`
+    : null;
 
   return (
     <Group
@@ -2620,6 +2892,20 @@ function OctopusNode({
           );
         })}
 
+      {mountingLabel && showPortNumbers && (
+        <Text
+          x={-Math.max(width, 120 / viewportScale) / 2}
+          y={height / 2 + 8 / viewportScale}
+          width={Math.max(width, 120 / viewportScale)}
+          text={mountingLabel}
+          align="center"
+          fontSize={11 / viewportScale}
+          fontFamily="Inter, Arial, sans-serif"
+          fill="#111827"
+          listening={false}
+        />
+      )}
+
       {selected && (
         <Rect
           x={-selectionWidth / 2 - 5 / viewportScale}
@@ -2711,7 +2997,7 @@ function DuctNode({
   const color = getLinkColorCss(duct.specification.linkColor);
   const strokeWidth = selected ? 4 / viewportScale : 2.5 / viewportScale;
   const controls = normalizeDuctControlsForPoints(pathPoints, duct.controls);
-  const usedLengthMeters = calculateDuctUsedLengthMeters(pathPoints, metersPerPixel, controls);
+  const usedLengthMeters = calculateDuctLengthBreakdownFromPoints(project, duct, pathPoints, controls).total;
   const lengthStatus = calculateDuctLengthStatus(duct.specification.availableLengthMeters, usedLengthMeters);
   const quadraticGeometry = buildQuadraticDuctGeometry(pathPoints, controls, metersPerPixel);
   const labelPoint = quadraticGeometry?.labelPoint ?? pathPoints[Math.floor(pathPoints.length / 2)];
