@@ -17,6 +17,10 @@ import {
   ProjectStorage,
   serializeProject,
 } from '../storage/ProjectStorage';
+import {
+  ServerProjectRepository,
+  type ServerProjectSummary,
+} from '../storage/ServerProjectRepository';
 import { CommandManager } from '../commands/CommandManager';
 import {
   createAddApparatusCommand,
@@ -333,6 +337,9 @@ export function DrawingCanvas() {
   const [isTechnicalSettingsOpen, setIsTechnicalSettingsOpen] = useState(false);
   const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
   const [isNewProjectConfirmationOpen, setIsNewProjectConfirmationOpen] = useState(false);
+  const [isServerProjectDialogOpen, setIsServerProjectDialogOpen] = useState(false);
+  const [serverProjects, setServerProjects] = useState<ServerProjectSummary[]>([]);
+  const [isServerProjectsLoading, setIsServerProjectsLoading] = useState(false);
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
   const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [pendingCdefImport, setPendingCdefImport] = useState<CdefImportResult | null>(null);
@@ -480,6 +487,134 @@ export function DrawingCanvas() {
     setIsDirty(false);
     setSaveMessage('Projet enregistré sous ' + fileName);
   }, [currentProjectFileName, project]);
+
+  const saveProjectToSmartCprey = useCallback(async () => {
+    try {
+       setSaveMessage('Enregistrement sur SmartCPREY…');
+
+       const repository = new ServerProjectRepository();
+       await repository.save(project);
+
+       ProjectStorage.save(project);
+       setIsDirty(false);
+       setSaveMessage('Projet enregistré sur SmartCPREY');
+     } catch (error) {
+       console.error(error);
+       setSaveMessage(null);
+
+       window.alert(
+         'Impossible d’enregistrer le projet sur SmartCPREY.\n' +
+         'Vérifiez votre connexion et votre session.'
+       );
+     }
+   }, [project]);
+
+  const openServerProjectDialog = useCallback(async () => {
+    setIsServerProjectDialogOpen(true);
+    setIsServerProjectsLoading(true);
+
+    try {
+      const repository = new ServerProjectRepository();
+      const projects = await repository.list();
+
+      setServerProjects(projects);
+    } catch (error) {
+      console.error(error);
+      setServerProjects([]);
+
+      window.alert(
+        'Impossible de récupérer les projets SmartCPREY.\n' +
+        'Vérifiez votre connexion et votre session.'
+      );
+
+      setIsServerProjectDialogOpen(false);
+    } finally {
+      setIsServerProjectsLoading(false);
+    }
+  }, []);
+
+  const deleteServerProject = useCallback(
+    async (projectId: string) => {
+      const serverProject = serverProjects.find(
+        (candidate) => candidate.id === projectId
+      );
+
+      const projectName = serverProject?.name ?? projectId;
+
+      if (
+        !window.confirm(
+          `Supprimer définitivement le projet "${projectName}" de SmartCPREY ?`
+        )
+      ) {
+        return;
+      }
+
+      try {
+        setIsServerProjectsLoading(true);
+
+        const repository = new ServerProjectRepository();
+        await repository.delete(projectId);
+
+        const projects = await repository.list();
+        setServerProjects(projects);
+
+        setSaveMessage(`Projet "${projectName}" supprimé de SmartCPREY.`);
+      } catch (error) {
+        console.error(error);
+
+        window.alert(
+          'Impossible de supprimer le projet SmartCPREY.\n' +
+            'Vérifiez votre connexion et votre session.'
+        );
+      } finally {
+        setIsServerProjectsLoading(false);
+      }
+    },
+    [serverProjects]
+  );
+
+  const openServerProject = useCallback(
+    async (projectId: string) => {
+      if (
+        isDirty &&
+        !window.confirm(
+          'Le projet actuel contient des modifications non enregistrées.\n' +
+            'Continuer et ouvrir un autre projet ?'
+        )
+      ) {
+        return;
+      }
+
+      try {
+        setIsServerProjectsLoading(true);
+
+        const repository = new ServerProjectRepository();
+        const nextProject = await repository.load(projectId);
+
+        commandManager.clear();
+        ProjectStorage.save(nextProject);
+
+        setProject(nextProject);
+        setCurrentProjectFileName(undefined);
+        setIsDirty(false);
+
+        resetTransientProjectUi();
+
+        setIsServerProjectDialogOpen(false);
+        setSaveMessage(`Projet "${nextProject.project.name}" ouvert depuis SmartCPREY.`);
+      } catch (error) {
+        console.error(error);
+
+        window.alert(
+          'Impossible d’ouvrir le projet SmartCPREY.\n' +
+            'Vérifiez votre connexion et votre session.'
+        );
+      } finally {
+        setIsServerProjectsLoading(false);
+      }
+    },
+    [commandManager, isDirty, resetTransientProjectUi]
+  );
 
   const openProjectFile = useCallback(async (file: File) => {
     if (isDirty && !window.confirm('Le projet actuel contient des modifications non enregistrées.\nContinuer et ouvrir un autre projet ?')) {
@@ -1879,7 +2014,9 @@ export function DrawingCanvas() {
           saveProjectFile();
         }}
         onSaveProjectAs={saveProjectFileAs}
+	onSaveProjectToSmartCprey={saveProjectToSmartCprey}
         onOpenProjectFile={openProjectFile}
+	onOpenProjectFromSmartCprey={openServerProjectDialog}
         onOpenSiteInformation={() => setIsSiteInformationOpen(true)}
         onOpenTechnicalSettings={() => setIsTechnicalSettingsOpen(true)}
         onOpenNomenclature={() => setIsNomenclatureOpen(true)}
@@ -2537,6 +2674,15 @@ export function DrawingCanvas() {
             onCreate={createNewProject}
           />
         )}
+	{isServerProjectDialogOpen && (
+	  <ServerProjectDialog
+	    projects={serverProjects}
+	    isLoading={isServerProjectsLoading}
+	    onCancel={() => setIsServerProjectDialogOpen(false)}
+	    onOpen={openServerProject}
+	    onDelete={deleteServerProject}
+	  />
+	)}
       </main>
     </div>
   );
@@ -2584,6 +2730,75 @@ function NewProjectDialog({
           </button>
           <button type="button" className="primary-action" onClick={onCreate}>
             Nouveau projet
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function ServerProjectDialog({
+  projects,
+  isLoading,
+  onCancel,
+  onOpen,
+  onDelete,
+}: {
+  projects: ServerProjectSummary[];
+  isLoading: boolean;
+  onCancel: () => void;
+  onOpen: (projectId: string) => void;
+  onDelete: (projectId: string) => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section
+        className="new-project-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="server-project-title"
+      >
+        <header>
+          <h2 id="server-project-title">Projets SmartCPREY</h2>
+        </header>
+
+        {isLoading ? (
+          <p>Chargement des projets…</p>
+        ) : projects.length === 0 ? (
+          <p>Aucun projet enregistré sur SmartCPREY.</p>
+        ) : (
+          <div>
+           {projects.map((serverProject) => (
+	     <div key={serverProject.id}>
+              <button
+    	        type="button"
+    	        className="secondary-action"
+    	        onClick={() => onOpen(serverProject.id)}
+   	        disabled={isLoading}
+  	      >
+   	        {serverProject.name}
+   	      </button>
+
+   	      <button
+    	        type="button"
+    	        className="secondary-action"
+    	        onClick={() => onDelete(serverProject.id)}
+    	        disabled={isLoading}
+  	      >
+     	       Supprimer
+  	      </button>
+ 	    </div>
+	   ))}
+          </div>
+        )}
+
+        <footer>
+          <button
+            type="button"
+            className="secondary-action"
+            onClick={onCancel}
+          >
+            Annuler
           </button>
         </footer>
       </section>

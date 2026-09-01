@@ -35,8 +35,10 @@ interface ToolbarProps {
   onToggleLayerVisible: (layerId: string, visible: boolean) => void;
   onSaveProject: () => void;
   onSaveProjectAs: () => void;
+  onSaveProjectToSmartCprey: () => void;
   onOpenProjectFile: (file: File) => void;
   onOpenSiteInformation: () => void;
+  onOpenProjectFromSmartCprey: () => void;
   onOpenTechnicalSettings: () => void;
   onOpenNomenclature: () => void;
   onOpenValidation: () => void;
@@ -87,7 +89,9 @@ export function Toolbar({
   onToggleLayerVisible,
   onSaveProject,
   onSaveProjectAs,
+  onSaveProjectToSmartCprey,
   onOpenProjectFile,
+  onOpenProjectFromSmartCprey,
   onOpenSiteInformation,
   onOpenTechnicalSettings,
   onOpenNomenclature,
@@ -172,9 +176,18 @@ export function Toolbar({
               setOpenMenu(null);
             }}
           />
+          <MenuItem
+  	    label="Ouvrir depuis SmartCPREY…"
+            onSelect={() => runAndClose(onOpenProjectFromSmartCprey)}
+          />
           <div className="menu-separator" />
           <MenuItem label="Enregistrer" shortcut="Cmd+S" onSelect={() => runAndClose(onSaveProject)} />
           <MenuItem label="Enregistrer sous…" shortcut="Cmd+Shift+S" onSelect={() => runAndClose(onSaveProjectAs)} />
+          <div className="menu-separator" />
+          <MenuItem
+            label="Enregistrer sur SmartCPREY"
+            onSelect={() => runAndClose(onSaveProjectToSmartCprey)}
+          />
           <div className="menu-separator" />
           <MenuItem label="Niveaux et pièces…" onSelect={() => runAndClose(onOpenImportedStudy)} />
           <div className="menu-separator" />
