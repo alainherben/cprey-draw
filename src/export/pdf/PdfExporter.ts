@@ -5,6 +5,7 @@ import { formatPdfDate, formatPdfLength, getPdfCoverRows } from './PdfLayout';
 import { renderPdfPlanPage } from './PdfDrawingRenderer';
 import type { ApparatusCatalogId, CpreyDrawProject } from '../../types/project';
 import type { PdfDocumentModel, PdfExportOptions, PdfPageModel } from './PdfTypes';
+import { CPREY_DRAW_VERSION } from '../../version';
 
 export async function exportProjectPdf(project: CpreyDrawProject, options: PdfExportOptions): Promise<void> {
   const { jsPDF } = await import('jspdf');
@@ -66,7 +67,7 @@ function renderCoverPage(doc: jsPDF, model: PdfDocumentModel) {
   renderKeyValueRows(doc, 20, 66, [
     ...coverRows,
     ['Date', formatPdfDate(model.generatedAt)],
-    ['Version CPREY DRAW', 'V1.8'],
+    ['Version CPREY DRAW', CPREY_DRAW_VERSION],
   ]);
 
   const warningText = model.validation.errorCount > 0

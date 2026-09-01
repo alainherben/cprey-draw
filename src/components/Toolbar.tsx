@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getApparatusCatalogMenuItems } from '../catalog/apparatus';
 import type { ApparatusCatalogId, DrawingLayer, OctopusModelId, Plan, StudyLevel, ToolMode } from '../types/project';
+import logoCpreyApplication from '../assets/Logo_Cprey_Application_Noir.png';
+import { CPREY_DRAW_VERSION } from '../version';
 
 type MenuId = 'project' | 'plan' | 'insert' | 'view' | 'layers' | 'measure' | 'history';
 
@@ -21,6 +23,8 @@ interface ToolbarProps {
   layers: DrawingLayer[];
   studyLevels: StudyLevel[];
   activeLevelId?: string;
+  smartCpreyUserEmail?: string;
+  smartCpreyAuthStatus?: string;
   onImportPlan: (file: File) => void;
   onImportConfiguratorProject: (file: File) => void;
   onFitToScreen: () => void;
@@ -71,6 +75,8 @@ export function Toolbar({
   layers,
   studyLevels,
   activeLevelId,
+  smartCpreyUserEmail,
+  smartCpreyAuthStatus,
   onImportPlan,
   onImportConfiguratorProject,
   onFitToScreen,
@@ -139,10 +145,14 @@ export function Toolbar({
   return (
     <header className="toolbar" ref={toolbarRef}>
       <div className="brand">
-        <span className="brand-mark">CP</span>
+        <img
+          className="brand-logo"
+          src={logoCpreyApplication}
+          alt="CPREY"
+        />
         <div>
           <h1>CPREY DRAW</h1>
-          <p>Socle de dessin</p>
+          <p>{CPREY_DRAW_VERSION}</p>
         </div>
       </div>
 
@@ -424,9 +434,13 @@ export function Toolbar({
       </div>
 
       <div className="status">
-        {metersPerPixel === null
-          ? 'Échelle non définie'
-          : `Échelle : ${(1 / metersPerPixel).toFixed(1)} px/m`}
+        <span>
+          {metersPerPixel === null
+            ? 'Échelle non définie'
+            : `Échelle : ${(1 / metersPerPixel).toFixed(1)} px/m`}
+        </span>
+        {smartCpreyUserEmail && <span>Connecté : {smartCpreyUserEmail}</span>}
+        {!smartCpreyUserEmail && smartCpreyAuthStatus && <span>{smartCpreyAuthStatus}</span>}
       </div>
     </header>
   );

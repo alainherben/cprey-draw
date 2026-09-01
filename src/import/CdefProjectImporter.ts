@@ -22,6 +22,7 @@ import type {
   CdefPieuvreTotals,
 } from './CdefImportTypes';
 import { validateCdefProject } from './CdefImportValidator';
+import { CPREY_DRAW_VERSION } from '../version';
 
 const APPARATUS_METRIC_MAP: Record<string, ApparatusCatalogId> = {
   prises: 'prise-16a',
@@ -72,7 +73,7 @@ export function importCdefProject(data: unknown, currentProject?: CpreyDrawProje
     site: {
       ...baseProject.site,
       name: validation.data.projectName,
-      projectVersion: 'V1.8',
+      projectVersion: CPREY_DRAW_VERSION,
     },
     status: 'design',
     technicalSettings: createDefaultTechnicalSettings(),

@@ -137,6 +137,7 @@ import {
   createUnassignOctopusPortCommand,
 } from '../commands/study/StudyCommands';
 import type { CdefImportResult } from '../import/CdefImportTypes';
+import { loadSmartCpreySession, type SmartCpreySessionState } from '../services/smartCpreyAuth';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -336,6 +337,7 @@ export function DrawingCanvas() {
   const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [pendingCdefImport, setPendingCdefImport] = useState<CdefImportResult | null>(null);
   const [project, setProject] = useState<CpreyDrawProject>(() => ProjectStorage.load());
+  const [smartCpreySessionState, setSmartCpreySessionState] = useState<SmartCpreySessionState>({ status: 'loading' });
   const [currentProjectFileName, setCurrentProjectFileName] = useState<string | undefined>(undefined);
   const [isDirty, setIsDirty] = useState(false);
   const [isPlanLoading, setIsPlanLoading] = useState(false);
@@ -364,6 +366,22 @@ export function DrawingCanvas() {
     () => project.ducts.filter((duct) => shouldDisplayDuctForActiveLevel(project, duct)),
     [project],
   );
+  const smartCpreyUserEmail =
+    smartCpreySessionState.status === 'authenticated' || smartCpreySessionState.status === 'development'
+      ? smartCpreySessionState.session.user.email
+      : undefined;
+  const smartCpreyAuthStatus =
+    smartCpreySessionState.status === 'loading'
+      ? 'Session SmartCPREY…'
+      : smartCpreySessionState.status === 'unauthenticated'
+        ? 'Connexion SmartCPREY requise'
+        : smartCpreySessionState.status === 'forbidden'
+          ? 'Accès CPREY DRAW non autorisé'
+          : smartCpreySessionState.status === 'error'
+            ? smartCpreySessionState.message
+            : smartCpreySessionState.status === 'development'
+              ? 'Session dev SmartCPREY'
+              : undefined;
   const nomenclature = useMemo(() => buildProjectNomenclature(project), [project]);
   const validationResult = useMemo(() => validateProject(project), [project]);
   const planImage = useHtmlImage(activePlan?.source ?? null);
@@ -578,6 +596,19 @@ export function DrawingCanvas() {
   useEffect(() => {
     ProjectStorage.save(project);
   }, [project]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSmartCpreySession(import.meta.env).then((sessionState) => {
+      if (!cancelled) {
+        setSmartCpreySessionState(sessionState);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!saveMessage) {
@@ -1831,6 +1862,8 @@ export function DrawingCanvas() {
         layers={getProjectLayers(project)}
         studyLevels={project.study?.levels ?? []}
         activeLevelId={project.activeLevelId}
+        smartCpreyUserEmail={smartCpreyUserEmail}
+        smartCpreyAuthStatus={smartCpreyAuthStatus}
         onImportPlan={importPlan}
         onImportConfiguratorProject={importConfiguratorProject}
         onFitToScreen={() => fitPlanToScreen()}

@@ -55,16 +55,11 @@ input {
   gap: 10px;
 }
 
-.brand-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  background: #12355b;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 800;
+.brand-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .brand h1 {
@@ -320,10 +315,13 @@ button.active {
 }
 
 .status {
+  display: grid;
+  gap: 2px;
   min-width: 150px;
   text-align: right;
   color: #475569;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
