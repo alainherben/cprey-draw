@@ -1,1 +1,1 @@
-export const CPREY_DRAW_VERSION = 'V1.9.0';
+export const CPREY_DRAW_VERSION = 'V1.9.2';
