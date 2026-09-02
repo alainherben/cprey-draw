@@ -130,17 +130,22 @@ function normalizePlan(plan: Plan | LegacyPlanImage): Plan {
   };
 }
 
-type LegacyProject = CpreyDrawProject & { connections?: LegacyDuct[] };
+type LegacyProject = Partial<CpreyDrawProject> & { schemaVersion: 1; connections?: LegacyDuct[] };
 
 function normalizeProject(project: LegacyProject): CpreyDrawProject {
+  const defaultProject = createDefaultProject();
   const migrationDate = new Date().toISOString();
-  const auditFallbackDate = project.project?.updatedAt ?? migrationDate;
+  const projectInfo = project.project ?? defaultProject.project;
+  const drawing = project.drawing ?? defaultProject.drawing;
+  const rawPlans = Array.isArray(project.plans) ? project.plans : defaultProject.plans;
+  const rawOctopuses = Array.isArray(project.octopuses) ? project.octopuses : defaultProject.octopuses;
   const rawApparatus = Array.isArray(project.apparatus) ? project.apparatus : [];
   const rawDucts = Array.isArray(project.ducts) && project.ducts.length > 0
     ? project.ducts
     : Array.isArray(project.connections)
       ? project.connections
       : [];
+  const auditFallbackDate = projectInfo.updatedAt ?? migrationDate;
 
   const normalizedStudy = normalizeImportedStudy(project.study);
   const activeLevelId = typeof project.activeLevelId === 'string' &&
@@ -148,7 +153,13 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
     ? project.activeLevelId
     : normalizedStudy?.levels[0]?.id;
   const normalizedProject: CpreyDrawProject = {
+    ...defaultProject,
     ...project,
+    schemaVersion: 1,
+    project: {
+      ...defaultProject.project,
+      ...projectInfo,
+    },
     site: normalizeSiteInformation(project.site),
     origin: normalizeProjectOrigin(project.origin),
     status: normalizeProjectStatus(project.status),
@@ -157,22 +168,20 @@ function normalizeProject(project: LegacyProject): CpreyDrawProject {
     audit: normalizeProjectAudit(project.audit, auditFallbackDate),
     technicalSettings: normalizeTechnicalSettings(project.technicalSettings),
     drawing: {
-      viewport: project.drawing.viewport,
-      metersPerPixel: project.drawing.metersPerPixel,
-      scaleReference: project.drawing.scaleReference,
-      scaleMarkerVisible: project.drawing.scaleMarkerVisible ?? project.drawing.scaleReference !== null,
-      zoomWheelEnabled: project.drawing.zoomWheelEnabled ?? true,
-      movementLocked: project.drawing.movementLocked ?? false,
-      showDuctLengths: project.drawing.showDuctLengths ?? true,
-      apparatusGlobalScale: project.drawing.apparatusGlobalScale ?? 1,
+      viewport: drawing.viewport ?? defaultProject.drawing.viewport,
+      metersPerPixel: drawing.metersPerPixel ?? defaultProject.drawing.metersPerPixel,
+      scaleReference: drawing.scaleReference ?? defaultProject.drawing.scaleReference,
+      scaleMarkerVisible: drawing.scaleMarkerVisible ?? drawing.scaleReference !== null,
+      zoomWheelEnabled: drawing.zoomWheelEnabled ?? true,
+      movementLocked: drawing.movementLocked ?? false,
+      showDuctLengths: drawing.showDuctLengths ?? true,
+      apparatusGlobalScale: drawing.apparatusGlobalScale ?? 1,
     },
-    plans: project.plans.map((plan) => normalizePlan(plan as Plan | LegacyPlanImage)),
+    plans: rawPlans.map((plan) => normalizePlan(plan as Plan | LegacyPlanImage)),
     electricalPanel: project.electricalPanel
       ? normalizeElectricalPanel(project.electricalPanel)
       : undefined,
-    octopuses: Array.isArray(project.octopuses)
-      ? project.octopuses.map(normalizeOctopus)
-      : [],
+    octopuses: rawOctopuses.map(normalizeOctopus),
     apparatus: rawApparatus.map((apparatus, index) =>
       normalizeApparatus(apparatus, rawApparatus.slice(0, index)),
     ),
@@ -298,8 +307,10 @@ type LegacyDuct = Partial<Duct> & {
 function normalizeDuct(duct: LegacyDuct, project: LegacyProject): Duct {
   const source = normalizeDuctSource(duct);
   const sourceOctopus = source.type === 'octopus-output' ? source : null;
+  const octopuses = Array.isArray(project.octopuses) ? project.octopuses : [];
+  const apparatus = Array.isArray(project.apparatus) ? project.apparatus : [];
   const octopus = sourceOctopus
-    ? project.octopuses.find((currentOctopus) => currentOctopus.id === sourceOctopus.octopusId)
+    ? octopuses.find((currentOctopus) => currentOctopus.id === sourceOctopus.octopusId)
     : undefined;
   const catalogModel = octopus ? getOctopusCatalogModel(octopus.modelId) : null;
   const output = octopus && sourceOctopus ? getEffectiveOctopusOutput(octopus, sourceOctopus.outputNumber) : undefined;
@@ -343,8 +354,8 @@ function normalizeDuct(duct: LegacyDuct, project: LegacyProject): Duct {
   };
   const pathPoints = getDuctPathPoints(
     normalizedDuct,
-    project.octopuses,
-    Array.isArray(project.apparatus) ? project.apparatus : [],
+    octopuses,
+    apparatus,
     project.electricalPanel,
     project.drawing?.metersPerPixel ?? null,
   );
@@ -376,10 +387,7 @@ function isProject(value: unknown): value is CpreyDrawProject {
 
   const maybeProject = value as Partial<CpreyDrawProject>;
   return (
-    maybeProject.schemaVersion === 1 &&
-    typeof maybeProject.project?.id === 'string' &&
-    typeof maybeProject.drawing?.viewport?.scale === 'number' &&
-    Array.isArray(maybeProject.plans)
+    maybeProject.schemaVersion === 1
   );
 }
 
@@ -428,6 +436,18 @@ export function deserializeProject(rawProject: string): CpreyDrawProject {
   }
 
   return normalizeProject(parsed as LegacyProject);
+}
+
+export function deserializeProjectPayload(projectPayload: unknown): CpreyDrawProject {
+  if (typeof projectPayload === 'string') {
+    return deserializeProject(projectPayload);
+  }
+
+  if (projectPayload && typeof projectPayload === 'object') {
+    return deserializeProject(JSON.stringify(projectPayload));
+  }
+
+  throw new ProjectFileError('invalid-project', 'La réponse ne contient pas de projet CPREY DRAW valide.');
 }
 
 export function createSafeProjectFileName(projectName: string | undefined): string {

@@ -1,5 +1,5 @@
 import type { CpreyDrawProject } from '../types/project';
-import { deserializeProject, serializeProject } from './ProjectStorage';
+import { deserializeProjectPayload, serializeProject } from './ProjectStorage';
 
 export interface ServerProjectSummary {
   id: string;
@@ -104,11 +104,11 @@ export class ServerProjectRepository {
 
     const payload = await response.json();
 
-    if (!payload || payload.ok !== true || typeof payload.project !== 'string') {
+    if (!payload || payload.ok !== true || !('project' in payload)) {
       throw new Error('Réponse projet serveur invalide.');
     }
 
-    return deserializeProject(payload.project);
+    return deserializeProjectPayload(payload.project);
   }
 
   async save(project: CpreyDrawProject): Promise<void> {
