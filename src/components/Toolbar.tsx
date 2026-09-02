@@ -4,7 +4,9 @@ import type { ApparatusCatalogId, DrawingLayer, OctopusModelId, Plan, StudyLevel
 import logoCpreyApplication from '../assets/Logo_Cprey_Application_Noir.png';
 import { CPREY_DRAW_VERSION } from '../version';
 
-type MenuId = 'project' | 'plan' | 'insert' | 'view' | 'layers' | 'measure' | 'history';
+type MenuId = 'project' | 'plan' | 'insert' | 'view' | 'layers' | 'measure' | 'history' | 'help';
+
+const DOCUMENTATION_BASE_URL = '/CPREY-DRAW/documentation/';
 
 interface ToolbarProps {
   activeTool: ToolMode;
@@ -144,6 +146,16 @@ export function Toolbar({
   const runAndClose = (action: () => void) => {
     action();
     setOpenMenu(null);
+  };
+
+  const openDocumentationPage = (page = '') => {
+    window.open(`${DOCUMENTATION_BASE_URL}${page}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const showAboutDialog = () => {
+    window.alert(
+      `CPREY DRAW\n${CPREY_DRAW_VERSION}\n\nDocumentation utilisateur : ${DOCUMENTATION_BASE_URL}`,
+    );
   };
 
   return (
@@ -375,6 +387,30 @@ export function Toolbar({
             shortcut="Cmd+Shift+Z"
             disabled={!canRedo}
             onSelect={() => runAndClose(onRedo)}
+          />
+        </MenuButton>
+
+        <MenuButton id="help" label="Aide" openMenu={openMenu} onToggle={setOpenMenu}>
+          <MenuItem
+            label="Documentation utilisateur"
+            onSelect={() => runAndClose(() => openDocumentationPage())}
+          />
+          <MenuItem
+            label="Bien démarrer"
+            onSelect={() => runAndClose(() => openDocumentationPage('bien-demarrer/'))}
+          />
+          <MenuItem
+            label="Dessin manuel"
+            onSelect={() => runAndClose(() => openDocumentationPage('dessin-manuel/'))}
+          />
+          <MenuItem
+            label="Import CPREY-DEVIS"
+            onSelect={() => runAndClose(() => openDocumentationPage('import-cprey-devis/'))}
+          />
+          <div className="menu-separator" />
+          <MenuItem
+            label="À propos de CPREY DRAW"
+            onSelect={() => runAndClose(showAboutDialog)}
           />
         </MenuButton>
       </nav>

@@ -123,13 +123,51 @@ test('apparatus catalog exposes Spot and Applique values from the reference docu
   assert.equal(applique.revision, 1);
 });
 
-test('apparatus insertion menu keeps socket variants in logical order before alphabetical items', () => {
-  const names = getApparatusCatalogMenuItems().map((catalogItem) => catalogItem.name);
+test('apparatus insertion menu is sorted alphabetically by displayed label without changing catalog ids', () => {
+  const menuItems = getApparatusCatalogMenuItems();
+  const names = menuItems.map((catalogItem) => catalogItem.name);
+
+  assert.deepEqual(names, [...names].sort((left, right) => left.localeCompare(right, 'fr')));
   assert.deepEqual(
-    names.slice(0, 4),
-    ['Prise', 'Prise haute', 'Prise double', 'Prise double haute'],
+    menuItems.map((catalogItem) => [catalogItem.id, catalogItem.name]),
+    [
+      ['plaque-cuisson', '32A Plaque cuisson'],
+      ['applique', 'Applique'],
+      ['chaudière', 'Chaudière'],
+      ['chauffe-eau', 'Chauffe eau'],
+      ['contact-sec', 'Contact Sec'],
+      ['radiateur', 'Convecteur'],
+      ['four', 'Four'],
+      ['frigo', 'Frigo'],
+      ['garage', 'Garage'],
+      ['hotte', 'Hotte'],
+      ['interrupteur-double', 'Interrupteur double'],
+      ['Interrupteur-double-vV', 'Interrupteur double 2v&v'],
+      ['Interrupteur-double-v', 'Interrupteur double v&v'],
+      ['interrupteur-simple', 'Interrupteur simple'],
+      ['interrupteur-v&v', 'Interrupteur va&vient'],
+      ['lampe', 'Lampe'],
+      ['lave-linge', 'Lave linge'],
+      ['lave-vaisselle', 'Lave vaisselle'],
+      ['pompe-a-chaleur', 'Pompe à chaleur'],
+      ['pompe-piscine', 'Pompe piscine'],
+      ['portail', 'Portail'],
+      ['interrupteur-poussoir', 'Poussoir'],
+      ['prise-16a', 'Prise'],
+      ['prise-antenne', 'Prise antenne'],
+      ['prise_double', 'Prise double'],
+      ['prise_double_haute', 'Prise double haute'],
+      ['prise_haute', 'Prise haute'],
+      ['prise-rj45', 'Prise RJ45'],
+      ['seche-linge', 'Sèche linge'],
+      ['seche-serviette', 'Sèche serviette'],
+      ['spot', 'Spot'],
+      ['verrou', 'Vérrou'],
+      ['vmc', 'VMC'],
+      ['volet-roulant', 'Volet roulant'],
+      ['wifi', 'WiFi'],
+    ],
   );
-  assert.ok(names.indexOf('Applique') < names.indexOf('Spot'));
 });
 
 test('every catalog SVG exists in src/assets/pictos', () => {

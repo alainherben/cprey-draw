@@ -97,16 +97,7 @@ export function getApparatusCatalogItem(catalogId: ApparatusCatalogId): Apparatu
 }
 
 export function getApparatusCatalogMenuItems(): ApparatusCatalogItem[] {
-  return [...APPARATUS_CATALOG].sort((left, right) => {
-    const leftOrder = APPARATUS_MENU_ORDER[left.id] ?? Number.POSITIVE_INFINITY;
-    const rightOrder = APPARATUS_MENU_ORDER[right.id] ?? Number.POSITIVE_INFINITY;
-
-    if (leftOrder !== rightOrder) {
-      return leftOrder - rightOrder;
-    }
-
-    return left.name.localeCompare(right.name, 'fr');
-  });
+  return [...APPARATUS_CATALOG].sort((left, right) => left.name.localeCompare(right.name, 'fr'));
 }
 
 export function validateApparatusCatalog(availableSvgFilenames: readonly string[]): string[] {
@@ -155,13 +146,6 @@ export function validateApparatusCatalog(availableSvgFilenames: readonly string[
 
   return errors;
 }
-
-const APPARATUS_MENU_ORDER: Partial<Record<ApparatusCatalogId, number>> = {
-  'prise-16a': 100,
-  prise_haute: 101,
-  prise_double: 102,
-  prise_double_haute: 103,
-};
 
 function item(
   id: ApparatusCatalogId,
