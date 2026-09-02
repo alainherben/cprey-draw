@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Import CPREY-DEVIS dans CPREY DRAW</title>
+    <title>Guide 3 - Import CPREY-DEVIS dans CPREY DRAW</title>
     <link rel="stylesheet" href="../assets/documentation.css" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <div class="header-inner">
         <a class="brand" href="/CPREY-DRAW/documentation/">
           <strong>CPREY DRAW</strong>
-          <span>Documentation utilisateur</span>
+          <span>Documentation utilisateur V1.9.4</span>
         </a>
         <nav class="nav" aria-label="Documentation">
           <a href="/CPREY-DRAW/documentation/">Accueil</a>
@@ -26,41 +26,129 @@
     <main class="page">
       <section class="hero">
         <div>
-          <p class="eyebrow">Guide 3</p>
+          <p class="eyebrow">Guide utilisateur 3</p>
           <h1>Dessiner en important le résultat d'un CPREY-DEVIS</h1>
-          <p class="lead">Utilisez les niveaux, pièces, appareils et pieuvres issus du configurateur comme base de dessin contrôlée.</p>
+          <p class="lead">
+            Utilisez l'étude issue du configurateur comme base : import, niveaux, pièces,
+            appareillages, pieuvres, ports et contrôle des éléments restant à placer.
+          </p>
         </div>
-        <div class="screenshot-slot">Capture future : panneau Étude importée</div>
+        <figure class="figure medium">
+          <a href="../assets/screenshots/figure-06-import-configurateur.png">
+            <img src="../assets/screenshots/figure-06-import-configurateur.png" alt="Fenêtre d'import depuis un configurateur" />
+          </a>
+          <figcaption>Figure 6 — Import depuis un configurateur</figcaption>
+        </figure>
       </section>
 
+      <nav class="guide-nav" aria-label="Navigation interne">
+        <a href="#principe">Principe</a>
+        <a href="#importer">Importer</a>
+        <a href="#niveaux">Niveaux</a>
+        <a href="#etude">Étude importée</a>
+        <a href="#convertir">Convertir</a>
+        <a href="#placer">Placer</a>
+        <a href="#ports">Ports</a>
+        <a href="#finaliser">Finaliser</a>
+      </nav>
+
       <section class="content-section two-column">
-        <div>
-          <h2>Parcours d'import</h2>
-          <ol class="steps">
-            <li>Importez le fichier JSON CPREY-DEVIS depuis le menu Projet.</li>
-            <li>Vérifiez les niveaux et les pièces créés ou rapprochés avec les références existantes.</li>
-            <li>Ouvrez le panneau Étude importée pour suivre les éléments à placer.</li>
-            <li>Convertissez les demandes en appareillages physiques adaptés au symbole souhaité.</li>
-            <li>Créez les regroupements lorsque plusieurs StudyDevice correspondent à un même appareillage placé.</li>
-            <li>Placez les appareillages sur le plan en conservant leurs associations à l'étude.</li>
-            <li>Renseignez les hauteurs et modes d'installation nécessaires.</li>
-            <li>Placez les pieuvres prévues et indiquez leurs pièces desservies.</li>
-            <li>Affectez les StudyDevice aux ports de pieuvres cohérents.</li>
-            <li>Contrôlez les éléments restant à placer dans le panneau Étude importée.</li>
-            <li>Contrôlez les longueurs de gaines et les raccordements.</li>
-            <li>Travaillez niveau par niveau pour réduire les erreurs de localisation.</li>
-            <li>Sauvegardez en local et sur SmartCPREY lorsque le projet est cohérent.</li>
-          </ol>
+        <div class="doc-flow">
+          <article id="principe" class="doc-step">
+            <h2>Principe</h2>
+            <p>Lorsque l'étude électrique du chantier a déjà été réalisée dans CPREY-DEVIS, vous n'avez pas besoin de recréer manuellement l'ensemble des besoins électriques dans CPREY DRAW.</p>
+            <p>L'import récupère les informations de l'étude et les utilise comme base pour réaliser le plan d'implantation. Vous devez néanmoins avoir préalablement terminé le <a href="/CPREY-DRAW/documentation/bien-demarrer/">Guide 1 — Bien démarrer</a>.</p>
+          </article>
+
+          <article id="importer" class="doc-step">
+            <h2>1. Importer l'étude CPREY-DEVIS</h2>
+            <p>Utilisez <strong>Projet → Importer depuis un configurateur</strong>, puis sélectionnez le fichier correspondant au chantier.</p>
+            <p>CPREY DRAW analyse le projet, son origine, le scénario, les niveaux, les pièces, les pieuvres, les appareillages et les warnings éventuels avant import.</p>
+            <div class="callout warning"><strong>Attention.</strong> Si le projet ouvert contient déjà des éléments, l'import remplace les pieuvres, appareillages et gaines tout en conservant le plan et les réglages de dessin existants.</div>
+          </article>
+
+          <article id="niveaux" class="doc-step">
+            <h2>2. Vérifier les niveaux et les pièces</h2>
+            <p>Après l'import, vérifiez les niveaux et les pièces récupérés. Les équipements issus de CPREY-DEVIS sont associés à leur niveau et à leur pièce lorsque l'information est disponible.</p>
+            <p>Corrigez ou complétez cette organisation avant de commencer le placement. Le panneau <strong>Niveaux et pièces…</strong> permet de suivre le niveau actif, les pièces et l'état des équipements placés ou non affectés.</p>
+            <figure class="figure narrow">
+              <a href="../assets/screenshots/figure-07-niveaux-pieces.png">
+                <img src="../assets/screenshots/figure-07-niveaux-pieces.png" alt="Panneau Niveaux et pièces avec équipements placés" />
+              </a>
+              <figcaption>Figure 7 — Organisation par niveaux et pièces</figcaption>
+            </figure>
+          </article>
+
+          <article id="etude" class="doc-step">
+            <h2>3. Vérifier l'étude importée</h2>
+            <p>Ouvrez le panneau <strong>Niveaux et pièces…</strong> pour retrouver les besoins électriques provenant de l'étude. Les repères permettent d'identifier les prises, éclairages, interrupteurs, prises spécialisées, volets roulants, fils pilotes et autres équipements prévus.</p>
+            <p>Chaque élément peut ensuite être associé à un appareillage physique à représenter sur le plan.</p>
+          </article>
+
+          <article id="convertir" class="doc-step">
+            <h2>4. Vérifier la conversion en appareillages physiques</h2>
+            <p>Une étude électrique peut contenir plusieurs fonctions qui correspondent, sur le chantier, à un seul appareillage physique. CPREY DRAW permet de transformer les besoins issus de CPREY-DEVIS en équipements réellement représentés sur le plan.</p>
+            <p>Par exemple, deux prises situées au même emplacement peuvent être représentées par une prise double lorsque cette association est compatible.</p>
+          </article>
+
+          <article class="doc-step">
+            <h2>5. Regrouper les équipements</h2>
+            <p>Lorsque plusieurs éléments de l'étude doivent être représentés par un seul appareillage physique, utilisez la fonction de regroupement. Validez ensuite le regroupement : le lien avec les éléments d'origine de CPREY-DEVIS est conservé.</p>
+            <p>Si nécessaire, un regroupement peut être dissocié pour revenir à des appareillages indépendants.</p>
+          </article>
+
+          <article id="placer" class="doc-step">
+            <h2>6. Positionner les appareillages sur le plan</h2>
+            <p>Les équipements qui n'ont pas encore été positionnés apparaissent comme restant à placer. Sélectionnez l'équipement souhaité, puis cliquez sur son emplacement réel dans le plan.</p>
+            <p>L'élément passe alors de l'état non positionné à l'état positionné. Répétez cette opération pour les différents équipements du niveau et utilisez le zoom pour obtenir un positionnement précis.</p>
+          </article>
+
+          <article class="doc-step">
+            <h2>7. Vérifier les hauteurs et modes d'installation</h2>
+            <p>Pour les équipements nécessitant une implantation particulière, vérifiez leurs propriétés. Certains appareillages peuvent être installés à une hauteur standard, en hauteur, sur une paroi ou selon une hauteur spécifique définie par le chantier.</p>
+          </article>
+
+          <article class="doc-step">
+            <h2>8. Positionner les pieuvres prévues par l'étude</h2>
+            <p>Positionnez chaque pieuvre prévue par l'étude en tenant compte de son niveau, de sa pièce d'installation, des pièces desservies, de son accessibilité et des longueurs de gaines.</p>
+            <p>Une pieuvre peut être installée dans une pièce tout en desservant plusieurs pièces voisines.</p>
+          </article>
+
+          <article id="ports" class="doc-step">
+            <h2>9. Vérifier l'affectation aux ports</h2>
+            <p>Les équipements provenant de l'étude doivent être affectés aux ports des pieuvres correspondantes. Chaque port doit correspondre à l'équipement prévu et respecter les caractéristiques électriques de l'installation.</p>
+            <p>CPREY DRAW conserve le lien entre l'élément provenant de CPREY-DEVIS, l'appareillage représenté sur le plan, la pieuvre et le port utilisé.</p>
+          </article>
+
+          <article id="finaliser" class="doc-step">
+            <h2>10. Contrôler et sauvegarder le projet</h2>
+            <p>Avant de considérer un niveau comme terminé, vérifiez qu'aucun équipement nécessaire n'est resté involontairement non positionné.</p>
+            <p>Contrôlez ensuite les positions, les hauteurs, les pièces desservies, les affectations aux ports, les longueurs de gaines et les éventuelles alertes.</p>
+            <p>Pour un chantier comportant plusieurs niveaux, terminez de préférence complètement un niveau avant de passer au suivant : afficher le plan, vérifier les pièces, positionner les appareillages, positionner les pieuvres, vérifier les affectations, contrôler les longueurs et sauvegarder.</p>
+            <p>Sauvegardez en local avec <strong>Projet → Enregistrer</strong> ou <strong>Projet → Enregistrer sous…</strong>, puis utilisez <strong>Projet → Enregistrer sur SmartCPREY</strong> pour conserver également le projet dans le Cloud SmartCPREY.</p>
+            <div class="callout"><strong>Résultat attendu.</strong> Le projet associe CPREY-DEVIS, besoins électriques, appareillages, pieuvres, ports et implantation réelle sur le plan.</div>
+          </article>
         </div>
-        <aside class="info-card">
-          <h3>À vérifier</h3>
-          <p>Un import ne remplace pas le contrôle terrain : relisez les pièces desservies, les ports affectés et les hauteurs techniques avant finalisation.</p>
-          <div class="screenshot-slot">Capture future : affectation des ports</div>
+
+        <aside class="toc">
+          <h2>Sommaire</h2>
+          <ol>
+            <li><a href="#principe">Principe</a></li>
+            <li><a href="#importer">Importer l'étude</a></li>
+            <li><a href="#niveaux">Niveaux et pièces</a></li>
+            <li><a href="#etude">Étude importée</a></li>
+            <li><a href="#convertir">Conversion physique</a></li>
+            <li><a href="#placer">Placement</a></li>
+            <li><a href="#ports">Affectation aux ports</a></li>
+            <li><a href="#finaliser">Contrôle final</a></li>
+          </ol>
         </aside>
       </section>
     </main>
 
-    <footer class="site-footer">Retour : <a href="/CPREY-DRAW/documentation/">Documentation CPREY DRAW</a></footer>
+    <footer class="site-footer guide-footer-links">
+      <a href="/CPREY-DRAW/documentation/">Retour au sommaire</a>
+      <a href="/CPREY-DRAW/documentation/bien-demarrer/">Guide commun : Bien démarrer</a>
+    </footer>
   </body>
 </html>
-

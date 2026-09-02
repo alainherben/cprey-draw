@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dessin manuel CPREY DRAW</title>
+    <title>Guide 2 - Dessiner manuellement avec CPREY DRAW</title>
     <link rel="stylesheet" href="../assets/documentation.css" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <div class="header-inner">
         <a class="brand" href="/CPREY-DRAW/documentation/">
           <strong>CPREY DRAW</strong>
-          <span>Documentation utilisateur</span>
+          <span>Documentation utilisateur V1.9.4</span>
         </a>
         <nav class="nav" aria-label="Documentation">
           <a href="/CPREY-DRAW/documentation/">Accueil</a>
@@ -26,38 +26,122 @@
     <main class="page">
       <section class="hero">
         <div>
-          <p class="eyebrow">Guide 2</p>
+          <p class="eyebrow">Guide utilisateur 2</p>
           <h1>Dessiner en insérant vos pieuvres et vos appareillages</h1>
-          <p class="lead">Construisez le projet manuellement, niveau par niveau, en conservant des associations propres entre pièces, appareils, pieuvres et ports.</p>
+          <p class="lead">
+            Construisez le plan électrique manuellement, en positionnant les pieuvres CPREYCONNECT,
+            les appareillages, puis les affectations nécessaires.
+          </p>
         </div>
-        <div class="screenshot-slot">Capture future : menu Insertion</div>
+        <figure class="figure narrow">
+          <a href="../assets/screenshots/figure-04-menu-insertion.png">
+            <img src="../assets/screenshots/figure-04-menu-insertion.png" alt="Menu Insertion avec les pieuvres et les appareillages" />
+          </a>
+          <figcaption>Figure 4 — Menu Insertion</figcaption>
+        </figure>
       </section>
 
+      <nav class="guide-nav" aria-label="Navigation interne">
+        <a href="#preparer">Préparer</a>
+        <a href="#pieuvres">Pieuvres</a>
+        <a href="#proprietes">Propriétés</a>
+        <a href="#appareillages">Appareillages</a>
+        <a href="#regrouper">Regrouper</a>
+        <a href="#affecter">Affecter</a>
+        <a href="#controler">Contrôler</a>
+      </nav>
+
       <section class="content-section two-column">
-        <div>
-          <h2>Étapes de dessin manuel</h2>
-          <ol class="steps">
-            <li>Préparez les niveaux et les pièces dans le panneau Niveaux et pièces.</li>
-            <li>Insérez les pieuvres nécessaires depuis le menu Insertion.</li>
-            <li>Renseignez les propriétés des pieuvres : nom, emplacement, pièces desservies, mode d'installation et hauteur si besoin.</li>
-            <li>Insérez les appareillages depuis la liste alphabétique du menu Insertion.</li>
-            <li>Positionnez précisément chaque appareillage sur le plan avec le niveau actif correspondant.</li>
-            <li>Regroupez les appareillages physiques lorsque plusieurs éléments de l'étude partagent un même symbole.</li>
-            <li>Affectez les appareillages aux pieuvres et aux ports disponibles.</li>
-            <li>Contrôlez les équipements non placés, les connexions incomplètes et les incohérences de localisation.</li>
-            <li>Sauvegardez régulièrement en local et sur SmartCPREY.</li>
-            <li>Finalisez en vérifiant la nomenclature, les longueurs de gaines et l'export PDF.</li>
-          </ol>
+        <div class="doc-flow">
+          <article class="doc-step">
+            <h2>Avant de commencer</h2>
+            <p>Terminez d'abord le <a href="/CPREY-DRAW/documentation/bien-demarrer/">Guide 1 — Bien démarrer</a>. Votre plan doit être importé, mis à l'échelle, associé aux paramètres techniques du chantier, équipé du tableau électrique et sauvegardé.</p>
+          </article>
+
+          <article id="preparer" class="doc-step">
+            <h2>1. Préparer les niveaux et les pièces</h2>
+            <p>Avant de positionner les équipements, vérifiez l'organisation du chantier en niveaux et en pièces depuis le panneau <strong>Niveaux et pièces…</strong>.</p>
+            <p>Créez les niveaux nécessaires, par exemple Sous-sol, RDC, Étage 1 ou Étage 2. Créez ensuite les pièces associées : Cuisine, Salon, Séjour, Chambre, Salle de bain, WC, Cellier, Garage, ou toute pièce utile au chantier.</p>
+            <p>Cette organisation permet d'identifier précisément l'emplacement des différents équipements.</p>
+          </article>
+
+          <article id="pieuvres" class="doc-step">
+            <h2>2. Positionner les pieuvres CPREYCONNECT</h2>
+            <p>Dans <strong>Insertion</strong>, choisissez le modèle correspondant à la zone à équiper, puis cliquez sur le plan pour positionner la pieuvre.</p>
+            <p>Les modèles apparaissent dans l'ordre métier suivant : Pieuvre Zone Cuisine, Pieuvre Zone Bain, Pieuvre Autre Zone, Pieuvre Zone Confort.</p>
+            <p>Une pieuvre doit être installée dans un emplacement accessible, discret, compatible avec le passage des gaines et permettant de desservir efficacement les pièces concernées.</p>
+            <ul>
+              <li>placard haut ;</li>
+              <li>cellier ;</li>
+              <li>dressing ;</li>
+              <li>WC ;</li>
+              <li>espace technique accessible.</li>
+            </ul>
+            <div class="callout"><strong>Conseil.</strong> Évitez les implantations qui imposent des longueurs de gaines inutilement importantes.</div>
+          </article>
+
+          <article id="proprietes" class="doc-step">
+            <h2>3. Renseigner les propriétés de la pieuvre</h2>
+            <p>Après avoir positionné une pieuvre, sélectionnez-la et vérifiez ses propriétés : nom, modèle, catalogue, niveau d'installation, pièce d'installation, mode d'installation, pièces desservies, position, rotation, dimensions et taille d'affichage.</p>
+            <figure class="figure medium">
+              <a href="../assets/screenshots/figure-05-proprietes-pieuvre.png">
+                <img src="../assets/screenshots/figure-05-proprietes-pieuvre.png" alt="Pieuvre sélectionnée avec son panneau de propriétés" />
+              </a>
+              <figcaption>Figure 5 — Propriétés d'une pieuvre</figcaption>
+            </figure>
+            <p>Positionnez précisément la pieuvre en utilisant le zoom. Lorsque son emplacement est définitif, verrouillez-la si nécessaire afin d'éviter tout déplacement accidentel.</p>
+          </article>
+
+          <article id="appareillages" class="doc-step">
+            <h2>4. Positionner les appareillages</h2>
+            <p>Insérez les appareillages électriques depuis la section <strong>Appareillages</strong> du menu <strong>Insertion</strong>. Cette liste est affichée par ordre alphabétique pour faciliter la recherche.</p>
+            <p>Sélectionnez le type souhaité, puis cliquez à son emplacement sur le plan. Vous pouvez notamment positionner des éclairages, interrupteurs, prises, prises spécialisées, équipements techniques, volets roulants, fils pilotes et autres appareillages disponibles dans CPREY DRAW.</p>
+          </article>
+
+          <article class="doc-step">
+            <h2>5. Positionner précisément chaque appareillage</h2>
+            <p>Après insertion, utilisez le zoom pour ajuster la position de chaque appareillage. Vérifiez également ses propriétés, notamment lorsqu'il est installé en hauteur ou nécessite une information particulière de pose.</p>
+            <p>L'objectif est que la position représentée corresponde le plus précisément possible à l'implantation prévue sur le chantier.</p>
+          </article>
+
+          <article id="regrouper" class="doc-step">
+            <h2>6. Regrouper les appareillages lorsque nécessaire</h2>
+            <p>Certains équipements physiques peuvent correspondre à plusieurs fonctions électriques. CPREY DRAW permet de regrouper les éléments concernés lorsqu'ils doivent être représentés par un seul appareillage physique.</p>
+            <p>Par exemple, deux prises prévues au même emplacement peuvent être regroupées lorsque l'installation correspond à une prise double compatible.</p>
+          </article>
+
+          <article id="affecter" class="doc-step">
+            <h2>7. Affecter les appareillages aux pieuvres</h2>
+            <p>Une fois les appareillages positionnés, affectez-les aux sorties des pieuvres correspondantes. Chaque affectation doit respecter le type d'appareillage, la fonction électrique, les possibilités de la pieuvre et les ports disponibles.</p>
+            <p>CPREY DRAW construit ainsi la correspondance entre les équipements représentés sur le plan et les sorties physiques des pieuvres CPREYCONNECT.</p>
+          </article>
+
+          <article id="controler" class="doc-step">
+            <h2>8. Contrôler, sauvegarder et finaliser</h2>
+            <p>Contrôlez régulièrement la position des pieuvres, la position des appareillages, les pièces desservies, les affectations, les longueurs calculées et les paramètres techniques.</p>
+            <p>Sauvegardez le projet avec <strong>Projet → Enregistrer</strong> ou <strong>Projet → Enregistrer sous…</strong>, puis utilisez <strong>Projet → Enregistrer sur SmartCPREY</strong> lorsque vous souhaitez conserver une copie Cloud.</p>
+            <p>Lorsque tous les équipements sont positionnés et affectés, vérifiez le tableau électrique, les niveaux, les pièces, les hauteurs particulières, les longueurs de gaines, les éventuelles alertes, la nomenclature et l'export PDF.</p>
+          </article>
         </div>
-        <aside class="info-card">
-          <h3>Conseil de méthode</h3>
-          <p>Travaillez par niveau, puis par pièce. Cette organisation limite les erreurs de localisation et facilite les contrôles en fin de saisie.</p>
-          <div class="screenshot-slot">Capture future : propriétés d'une pieuvre</div>
+
+        <aside class="toc">
+          <h2>Sommaire</h2>
+          <ol>
+            <li><a href="#preparer">Préparer niveaux et pièces</a></li>
+            <li><a href="#pieuvres">Positionner les pieuvres</a></li>
+            <li><a href="#proprietes">Propriétés de pieuvre</a></li>
+            <li><a href="#appareillages">Positionner les appareillages</a></li>
+            <li><a href="#regrouper">Regrouper</a></li>
+            <li><a href="#affecter">Affecter aux ports</a></li>
+            <li><a href="#controler">Contrôler et sauvegarder</a></li>
+          </ol>
         </aside>
       </section>
     </main>
 
-    <footer class="site-footer">Guide précédent : <a href="/CPREY-DRAW/documentation/bien-demarrer/">Bien démarrer</a></footer>
+    <footer class="site-footer guide-footer-links">
+      <a href="/CPREY-DRAW/documentation/">Retour au sommaire</a>
+      <a href="/CPREY-DRAW/documentation/import-cprey-devis/">Guide suivant : Import CPREY-DEVIS</a>
+    </footer>
   </body>
 </html>
-

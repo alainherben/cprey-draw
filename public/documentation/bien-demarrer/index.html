@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bien démarrer avec CPREY DRAW</title>
+    <title>Guide 1 - Bien démarrer avec CPREY DRAW</title>
     <link rel="stylesheet" href="../assets/documentation.css" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <div class="header-inner">
         <a class="brand" href="/CPREY-DRAW/documentation/">
           <strong>CPREY DRAW</strong>
-          <span>Documentation utilisateur</span>
+          <span>Documentation utilisateur V1.9.4</span>
         </a>
         <nav class="nav" aria-label="Documentation">
           <a href="/CPREY-DRAW/documentation/">Accueil</a>
@@ -26,39 +26,129 @@
     <main class="page">
       <section class="hero">
         <div>
-          <p class="eyebrow">Guide 1</p>
+          <p class="eyebrow">Guide utilisateur 1</p>
           <h1>Bien démarrer avec CPREY DRAW</h1>
-          <p class="lead">Préparez le chantier, importez le plan, définissez l'échelle et réalisez une première sauvegarde fiable.</p>
+          <p class="lead">
+            Préparez le chantier avant de dessiner : accès, connexion, informations chantier,
+            import du plan, échelle, paramètres techniques, tableau électrique et première sauvegarde.
+          </p>
         </div>
-        <div class="screenshot-slot">Capture future : écran d'accueil projet</div>
+        <figure class="figure medium">
+          <a href="../assets/screenshots/figure-02-interface-principale.png">
+            <img src="../assets/screenshots/figure-02-interface-principale.png" alt="Espace de travail CPREY DRAW après connexion" />
+          </a>
+          <figcaption>Figure 2 — Interface principale de CPREY DRAW</figcaption>
+        </figure>
       </section>
 
+      <nav class="guide-nav" aria-label="Navigation interne">
+        <a href="#acces">Accès</a>
+        <a href="#connexion">Connexion</a>
+        <a href="#chantier">Chantier</a>
+        <a href="#plan">Plan</a>
+        <a href="#echelle">Échelle</a>
+        <a href="#parametres">Paramètres</a>
+        <a href="#tableau">Tableau</a>
+        <a href="#sauvegarde">Sauvegarde</a>
+      </nav>
+
       <section class="content-section two-column">
-        <div>
-          <h2>Parcours recommandé</h2>
-          <ol class="steps">
-            <li>Demandez l'accès à CPREY DRAW auprès de l'administrateur SmartCPREY de votre organisation.</li>
-            <li>Connectez-vous avec votre Code Site, votre adresse e-mail et votre mot de passe.</li>
-            <li>Renseignez les Informations chantier : client, adresse, référence, distributeur, électricien et version du projet.</li>
-            <li>Importez le plan au format PNG ou JPG/JPEG depuis le menu Plan.</li>
-            <li>Définissez l'échelle avec deux points connus, puis saisissez la distance réelle en mètres.</li>
-            <li>Contrôlez l'échelle avec l'outil Mesure sur une cote connue du plan.</li>
-            <li>Vérifiez les Paramètres techniques : hauteurs sous plafond, hauteur du tableau, marge de raccordement et vide sanitaire.</li>
-            <li>Insérez le tableau électrique une fois l'échelle validée.</li>
-            <li>Verrouillez le plan ou les déplacements lorsque le positionnement de référence est terminé.</li>
-            <li>Effectuez une première sauvegarde locale, puis une sauvegarde SmartCPREY si votre session le permet.</li>
-            <li>Choisissez ensuite votre méthode de dessin : insertion manuelle ou import du résultat CPREY-DEVIS.</li>
-          </ol>
+        <div class="doc-flow">
+          <article id="acces" class="doc-step">
+            <h2>1. Demander votre accès</h2>
+            <p>Pour utiliser CPREY DRAW, vous devez disposer d'un accès personnel. Faites une demande d'accès en indiquant votre adresse e-mail.</p>
+            <p>Après validation, un lien de connexion vous permet d'accéder à CPREY DRAW.</p>
+          </article>
+
+          <article id="connexion" class="doc-step">
+            <h2>2. Se connecter</h2>
+            <p>Depuis la page de connexion, renseignez votre Code Site, votre adresse e-mail et votre mot de passe, puis validez pour ouvrir CPREY DRAW.</p>
+            <figure class="figure medium">
+              <a href="../assets/screenshots/figure-01-connexion.png">
+                <img src="../assets/screenshots/figure-01-connexion.png" alt="Page de connexion CPREY DRAW" />
+              </a>
+              <figcaption>Figure 1 — Connexion à CPREY DRAW</figcaption>
+            </figure>
+            <p>Après connexion, l'interface principale affiche la zone de dessin et la barre de menus : Projet, Plan, Insertion, Vue, Calques, Mesure, Historique et Aide.</p>
+          </article>
+
+          <article id="chantier" class="doc-step">
+            <h2>3. Renseigner les informations du chantier</h2>
+            <p>Dans le menu <strong>Projet → Informations chantier</strong>, renseignez les informations correspondant à votre chantier.</p>
+            <p>Ces informations permettent d'identifier clairement votre projet et seront conservées avec celui-ci.</p>
+          </article>
+
+          <article id="plan" class="doc-step">
+            <h2>4. Importer votre plan</h2>
+            <p>Sélectionnez <strong>Plan → Importer le plan</strong>, puis choisissez le fichier correspondant au niveau sur lequel vous souhaitez travailler.</p>
+            <p>Le plan est affiché dans l'espace de dessin. Vous pouvez ensuite le déplacer et utiliser le zoom pour travailler précisément sur les différentes zones.</p>
+          </article>
+
+          <article id="echelle" class="doc-step">
+            <h2>5. Définir puis vérifier l'échelle</h2>
+            <p>Cette étape permet à CPREY DRAW de convertir les distances du dessin en distances réelles. Dans le menu <strong>Mesure</strong>, l'entrée s'appelle <strong>Définir l'échelle</strong> tant qu'aucune échelle n'est définie, puis <strong>Modifier l'échelle</strong> ensuite.</p>
+            <ol>
+              <li>Repérez sur le plan une longueur dont vous connaissez précisément la dimension réelle.</li>
+              <li>Cliquez sur le premier point de cette longueur.</li>
+              <li>Déplacez la souris jusqu'au deuxième point, puis cliquez.</li>
+              <li>Saisissez la longueur réelle en mètres et validez.</li>
+            </ol>
+            <p>La longueur de référence apparaît sur le plan. Vérifiez ensuite l'échelle avec <strong>Mesure → Mesurer</strong> sur une ou plusieurs cotes connues.</p>
+            <p>Lorsque l'échelle est validée, utilisez <strong>Mesure → Effacer la mesure</strong>. Si vous ne souhaitez plus voir le repère de référence, décochez <strong>Mesure → Afficher le repère d'échelle</strong>.</p>
+            <figure class="figure narrow">
+              <a href="../assets/screenshots/figure-03-menu-mesure.png">
+                <img src="../assets/screenshots/figure-03-menu-mesure.png" alt="Menu Mesure de CPREY DRAW" />
+              </a>
+              <figcaption>Figure 3 — Menu Mesure</figcaption>
+            </figure>
+            <div class="callout warning"><strong>Important.</strong> Ne commencez pas à placer le tableau, les pieuvres ou les appareillages avant d'avoir contrôlé l'échelle sur plusieurs dimensions du plan.</div>
+          </article>
+
+          <article id="parametres" class="doc-step">
+            <h2>6. Vérifier les paramètres techniques</h2>
+            <p>Sélectionnez <strong>Projet → Paramètres techniques</strong> et vérifiez les paramètres proposés.</p>
+            <ul>
+              <li><strong>Hauteur de plafond générale</strong> : valeur utilisée par défaut pour le chantier.</li>
+              <li><strong>Marge de gaine</strong> : longueur supplémentaire prise en compte dans les calculs.</li>
+              <li><strong>Hauteur du vide sanitaire</strong> : hauteur disponible lorsque le vide sanitaire sert au passage des gaines.</li>
+              <li><strong>Hauteur du centre du tableau électrique</strong> : donnée utilisée pour les longueurs de raccordement.</li>
+            </ul>
+          </article>
+
+          <article id="tableau" class="doc-step">
+            <h2>7. Positionner le tableau électrique</h2>
+            <p>Sélectionnez <strong>Insertion → Tableau électrique</strong>. Une croix verte suit le pointeur de la souris : cliquez à l'emplacement prévu pour le futur tableau électrique.</p>
+            <p>Utilisez le zoom pour ajuster sa position. Lorsque le tableau est sélectionné, ses propriétés permettent de modifier sa position, son orientation et ses paramètres.</p>
+            <p>Lorsque son implantation est définitive, activez l'option <strong>Verrouillé</strong> afin d'éviter un déplacement accidentel pendant la suite du dessin.</p>
+          </article>
+
+          <article id="sauvegarde" class="doc-step">
+            <h2>8. Effectuer une première sauvegarde</h2>
+            <p>Pour conserver une copie locale, sélectionnez <strong>Projet → Enregistrer sous…</strong>. Pour sauvegarder dans le Cloud SmartCPREY, sélectionnez <strong>Projet → Enregistrer sur SmartCPREY</strong>.</p>
+            <p>Votre projet est prêt lorsque le plan est importé, l'échelle vérifiée, les paramètres techniques relus, le tableau placé et une première sauvegarde réalisée.</p>
+            <div class="callout"><strong>Étape suivante.</strong> Continuez avec le guide de dessin manuel ou avec le guide d'import CPREY-DEVIS selon votre méthode de travail.</div>
+          </article>
         </div>
-        <aside class="info-card">
-          <h3>Point de contrôle</h3>
-          <p>Avant de placer les équipements, le projet doit contenir un plan lisible, une échelle vérifiée et des paramètres techniques adaptés au chantier.</p>
-          <div class="screenshot-slot">Capture future : menu Mesure</div>
+
+        <aside class="toc">
+          <h2>Sommaire</h2>
+          <ol>
+            <li><a href="#acces">Demander votre accès</a></li>
+            <li><a href="#connexion">Se connecter</a></li>
+            <li><a href="#chantier">Informations chantier</a></li>
+            <li><a href="#plan">Importer le plan</a></li>
+            <li><a href="#echelle">Échelle et mesures</a></li>
+            <li><a href="#parametres">Paramètres techniques</a></li>
+            <li><a href="#tableau">Tableau électrique</a></li>
+            <li><a href="#sauvegarde">Première sauvegarde</a></li>
+          </ol>
         </aside>
       </section>
     </main>
 
-    <footer class="site-footer">Guide suivant : <a href="/CPREY-DRAW/documentation/dessin-manuel/">Dessin manuel</a></footer>
+    <footer class="site-footer guide-footer-links">
+      <a href="/CPREY-DRAW/documentation/">Retour au sommaire</a>
+      <a href="/CPREY-DRAW/documentation/dessin-manuel/">Guide suivant : Dessin manuel</a>
+    </footer>
   </body>
 </html>
-
