@@ -27,6 +27,7 @@ interface ToolbarProps {
   activeLevelId?: string;
   smartCpreyUserEmail?: string;
   smartCpreyAuthStatus?: string;
+  onLogoutSmartCprey: () => void;
   onImportPlan: (file: File) => void;
   onImportConfiguratorProject: (file: File) => void;
   onFitToScreen: () => void;
@@ -81,6 +82,7 @@ export function Toolbar({
   activeLevelId,
   smartCpreyUserEmail,
   smartCpreyAuthStatus,
+  onLogoutSmartCprey,
   onImportPlan,
   onImportConfiguratorProject,
   onFitToScreen,
@@ -407,6 +409,10 @@ export function Toolbar({
             label="Import CPREY-DEVIS"
             onSelect={() => runAndClose(() => openDocumentationPage('import-cprey-devis/'))}
           />
+          <MenuItem
+            label="FAQ"
+            onSelect={() => runAndClose(() => openDocumentationPage('faq/'))}
+          />
           <div className="menu-separator" />
           <MenuItem
             label="À propos de CPREY DRAW"
@@ -488,7 +494,14 @@ export function Toolbar({
             ? 'Échelle non définie'
             : `Échelle : ${(1 / metersPerPixel).toFixed(1)} px/m`}
         </span>
-        {smartCpreyUserEmail && <span>Connecté : {smartCpreyUserEmail}</span>}
+        {smartCpreyUserEmail && (
+          <span className="connected-status">
+            <span>Connecté : {smartCpreyUserEmail}</span>
+            <button type="button" className="logout-button" onClick={onLogoutSmartCprey}>
+              Déconnexion
+            </button>
+          </span>
+        )}
         {!smartCpreyUserEmail && smartCpreyAuthStatus && <span>{smartCpreyAuthStatus}</span>}
       </div>
     </header>

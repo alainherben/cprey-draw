@@ -325,6 +325,19 @@ button.active {
   white-space: nowrap;
 }
 
+.connected-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.logout-button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .workspace {
   position: relative;
   min-width: 0;

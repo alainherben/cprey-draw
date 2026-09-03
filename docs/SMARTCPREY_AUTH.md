@@ -74,6 +74,14 @@ L'endpoint doit répondre avec :
 
 Ajouter `Cache-Control: no-store` sur cette route.
 
+## Déconnexion Frontend
+
+CPREY DRAW déclenche la déconnexion avec :
+
+`POST /CPREY-DRAW/api/logout.php`
+
+Le dépôt frontend ne contient pas le mécanisme de session SmartCPREY réel. Cet endpoint doit donc être ajouté côté serveur SmartCPREY en réutilisant le bootstrap et les fonctions de déconnexion existants. Il doit invalider la session SmartCPREY courante, répondre sans cache, puis laisser le rechargement de `/CPREY-DRAW/` renvoyer l'utilisateur vers le login SmartCPREY selon le garde serveur existant.
+
 ## Développement Local
 
 Le frontend fournit un mock de session uniquement en mode dev Vite. Il n'est pas activable en production :

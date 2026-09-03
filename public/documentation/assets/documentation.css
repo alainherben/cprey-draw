@@ -200,6 +200,28 @@ li {
   font-weight: 800;
 }
 
+.faq-list {
+  display: grid;
+  gap: 12px;
+}
+
+.faq-list details {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #ffffff;
+}
+
+.faq-list summary {
+  color: #111827;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.faq-list p {
+  color: #475569;
+}
+
 .two-column {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);

@@ -38,6 +38,11 @@ export function getSmartCpreySessionEndpoint(baseUrl: string | undefined): strin
   return `${base.endsWith('/') ? base : `${base}/`}api/session.php`;
 }
 
+export function getSmartCpreyLogoutEndpoint(baseUrl: string | undefined): string {
+  const base = baseUrl && baseUrl.trim() ? baseUrl.trim() : '/';
+  return `${base.endsWith('/') ? base : `${base}/`}api/logout.php`;
+}
+
 export function shouldUseSmartCpreyDevAuthMock(env: SmartCpreyAuthEnv): boolean {
   return Boolean(env.DEV && !env.PROD && env.VITE_SMARTCPREY_AUTH_MOCK !== 'false');
 }
@@ -92,6 +97,34 @@ export async function fetchSmartCpreySession(
     return { status: 'authenticated', session: payload };
   } catch {
     return { status: 'error', message: 'Session SmartCPREY indisponible.' };
+  }
+}
+
+export async function logoutSmartCpreySession(
+  fetchImpl: FetchLike,
+  endpoint: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (response.status === 401) {
+      return { ok: true };
+    }
+
+    if (!response.ok) {
+      return { ok: false, message: 'Déconnexion SmartCPREY indisponible.' };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Déconnexion SmartCPREY indisponible.' };
   }
 }
 

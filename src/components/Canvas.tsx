@@ -141,7 +141,12 @@ import {
   createUnassignOctopusPortCommand,
 } from '../commands/study/StudyCommands';
 import type { CdefImportResult } from '../import/CdefImportTypes';
-import { loadSmartCpreySession, type SmartCpreySessionState } from '../services/smartCpreyAuth';
+import {
+  getSmartCpreyLogoutEndpoint,
+  loadSmartCpreySession,
+  logoutSmartCpreySession,
+  type SmartCpreySessionState,
+} from '../services/smartCpreyAuth';
 import { viewportPointToWorld, zoomViewportAtPointer } from '../domain/viewport';
 import type {
   ApparatusCatalogId,
@@ -508,6 +513,36 @@ export function DrawingCanvas() {
        );
      }
    }, [project]);
+
+  const logoutFromSmartCprey = useCallback(async () => {
+    if (smartCpreySessionState.status === 'development') {
+      setSmartCpreySessionState({ status: 'unauthenticated' });
+      setSaveMessage('Session dev SmartCPREY terminée.');
+      return;
+    }
+
+    if (smartCpreySessionState.status !== 'authenticated') {
+      return;
+    }
+
+    setSaveMessage('Déconnexion SmartCPREY…');
+    const result = await logoutSmartCpreySession(
+      fetch,
+      getSmartCpreyLogoutEndpoint(import.meta.env.BASE_URL),
+    );
+
+    if (!result.ok) {
+      window.alert(
+        `${result.message}\n\nVérifiez que l'endpoint serveur /CPREY-DRAW/api/logout.php est disponible côté SmartCPREY.`,
+      );
+      setSaveMessage(null);
+      return;
+    }
+
+    setSmartCpreySessionState({ status: 'unauthenticated' });
+    setSaveMessage('Déconnecté de SmartCPREY.');
+    window.location.assign(import.meta.env.BASE_URL || '/');
+  }, [smartCpreySessionState.status]);
 
   const openServerProjectDialog = useCallback(async () => {
     setIsServerProjectDialogOpen(true);
@@ -1999,6 +2034,7 @@ export function DrawingCanvas() {
         activeLevelId={project.activeLevelId}
         smartCpreyUserEmail={smartCpreyUserEmail}
         smartCpreyAuthStatus={smartCpreyAuthStatus}
+        onLogoutSmartCprey={logoutFromSmartCprey}
         onImportPlan={importPlan}
         onImportConfiguratorProject={importConfiguratorProject}
         onFitToScreen={() => fitPlanToScreen()}
