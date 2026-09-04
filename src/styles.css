@@ -37,7 +37,7 @@ input {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(170px, auto) minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(170px, auto) minmax(0, 1fr) minmax(0, auto) auto minmax(0, auto);
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -224,6 +224,7 @@ input {
   align-items: center;
   gap: 7px;
   min-width: 160px;
+  max-width: 220px;
   color: #475569;
   font-size: 12px;
   font-weight: 800;
@@ -246,6 +247,7 @@ input {
   align-items: center;
   justify-content: flex-end;
   gap: 5px;
+  min-width: 0;
 }
 
 button,
@@ -318,11 +320,13 @@ button.active {
   display: grid;
   gap: 2px;
   min-width: 150px;
+  max-width: 310px;
   text-align: right;
   color: #475569;
   font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .connected-status {
@@ -330,12 +334,56 @@ button.active {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
+}
+
+.connected-status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logout-button {
   min-height: 26px;
   padding: 0 8px;
   font-size: 12px;
+}
+
+@media (max-width: 1500px) {
+  .toolbar {
+    grid-template-columns: minmax(150px, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 12px;
+  }
+
+  .brand {
+    grid-column: 1 / 2;
+    grid-row: 1;
+  }
+
+  .menu-bar {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .level-selector {
+    grid-column: 1 / 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .quick-actions {
+    grid-column: 2 / 3;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .status {
+    grid-column: 3 / 4;
+    grid-row: 2;
+    min-width: 0;
+    max-width: 360px;
+  }
 }
 
 .workspace {
@@ -2113,14 +2161,35 @@ button.active {
   }
 
   .menu-bar {
-    overflow-x: auto;
-    scrollbar-width: thin;
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .level-selector,
+  .quick-actions,
+  .status {
+    grid-column: 1 / -1;
+  }
+
+  .level-selector {
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .quick-actions {
+    grid-row: 3;
+    justify-self: start;
   }
 
   .status {
-    grid-column: 1 / -1;
+    grid-row: 4;
     min-width: 0;
+    max-width: none;
     text-align: left;
+  }
+
+  .connected-status {
+    justify-content: flex-start;
   }
 }
 
@@ -2129,12 +2198,25 @@ button.active {
     grid-template-columns: 1fr auto;
   }
 
+  .brand {
+    grid-column: 1 / 2;
+    grid-row: 1;
+  }
+
   .menu-bar {
     grid-column: 1 / -1;
+    grid-row: 2;
     order: 3;
   }
 
+  .level-selector {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
   .quick-actions {
+    grid-column: 2 / 3;
+    grid-row: 1;
     justify-content: flex-end;
   }
 
